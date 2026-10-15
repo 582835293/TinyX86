@@ -1,71 +1,76 @@
-#pragma once
-#include <windows.h>
+ï»¿#pragma once
+
 #include "disasm.h"
-
-// FOUÕ»ºËĞÄ×ª»»¹«Ê½£ºÎïÀíË÷Òı = (TOP + i) % 8
-// ×¢Òâ£ºTOP ÊÇÏòÏÂÔö³¤µÄ£¨Push ÊÇ¼õ£©£¬µ«ÔÚÕ»ÄÚÑ°Ö·Ê± ST(1) ÊÇ TOP+1
+// FOUæ ˆæ ¸å¿ƒè½¬æ¢å…¬å¼ï¼šç‰©ç†ç´¢å¼• = (TOP + i) % 8
+// æ³¨æ„ï¼šTOP æ˜¯å‘ä¸‹å¢é•¿çš„ï¼ˆPush æ˜¯å‡ï¼‰ï¼Œä½†åœ¨æ ˆå†…å¯»å€æ—¶ ST(1) æ˜¯ TOP+1
 #define ST(i) ctx->FPU.Regs[(ctx->FPU.SW.TOP + (i)) & 0x7]
-
 typedef union {
-	DWORD I32;
-	WORD I16;
+	uint32_t I32;
+	uint16_t I16;
 	struct {
-		BYTE L;
-		BYTE H;
+		uint8_t L;
+		uint8_t H;
 	}I8;
 }REG32;
-
-// FPU ×´Ì¬×Ö(Status Word) - ÍêÈ«Î»Óò»¯
-// ×ñÑ­ x86 Ğ¡¶ËĞò¶¨Òå
+// FPU çŠ¶æ€å­—(Status uint16_t) - å®Œå…¨ä½åŸŸåŒ–
+// éµå¾ª x86 å°ç«¯åºå®šä¹‰
 typedef union {
-	uint16_t Value; // ÕûÌå·ÃÎÊ
+	uint16_t Value; // æ•´ä½“è®¿é—®
 	struct {
-		uint16_t IE : 1; // 0: ÎŞĞ§²Ù×÷Òì³£
-		uint16_t DE : 1; // 1: ·Ç¹æ¸ñ»¯²Ù×÷ÊıÒì³£
-		uint16_t ZE : 1; // 2: ³ıÁãÒì³£
-		uint16_t OE : 1; // 3: Òç³öÒì³£
-		uint16_t UE : 1; // 4: ÏÂÒçÒì³£
-		uint16_t PE : 1; // 5: ¾«¶ÈÒì³£
-		uint16_t SF : 1; // 6: Õ»´íÎó
-		uint16_t ES : 1; // 7: Òì³£»ã×Ü
-		uint16_t C0 : 1; // 8: Ìõ¼şÂë 0
-		uint16_t C1 : 1; // 9: Ìõ¼şÂë 1
-		uint16_t C2 : 1; // 10: Ìõ¼şÂë 2
-		uint16_t TOP : 3; // 11-13: Õ»¶¥Ö¸Õë (¹Ø¼ü£¡)
-		uint16_t C3 : 1; // 14: Ìõ¼şÂë 3
-		uint16_t B : 1;  // 15: FPU Ã¦
+		uint16_t IE : 1; // 0: æ— æ•ˆæ“ä½œå¼‚å¸¸
+		uint16_t DE : 1; // 1: éè§„æ ¼åŒ–æ“ä½œæ•°å¼‚å¸¸
+		uint16_t ZE : 1; // 2: é™¤é›¶å¼‚å¸¸
+		uint16_t OE : 1; // 3: æº¢å‡ºå¼‚å¸¸
+		uint16_t UE : 1; // 4: ä¸‹æº¢å¼‚å¸¸
+		uint16_t PE : 1; // 5: ç²¾åº¦å¼‚å¸¸
+		uint16_t SF : 1; // 6: æ ˆé”™è¯¯
+		uint16_t ES : 1; // 7: å¼‚å¸¸æ±‡æ€»
+		uint16_t C0 : 1; // 8: æ¡ä»¶ç  0
+		uint16_t C1 : 1; // 9: æ¡ä»¶ç  1
+		uint16_t C2 : 1; // 10: æ¡ä»¶ç  2
+		uint16_t TOP : 3; // 11-13: æ ˆé¡¶æŒ‡é’ˆ (å…³é”®ï¼)
+		uint16_t C3 : 1; // 14: æ¡ä»¶ç  3
+		uint16_t B : 1;  // 15: FPU å¿™
 	};
-} FPU_STATUS_WORD;
-
-// FPU ¿ØÖÆ×Ö (Control Word)
+} FPU_STATUS_uint16_t;
+// FPU æ§åˆ¶å­— (Control uint16_t)
 typedef union {
 	uint16_t Value;
 	struct {
-		uint16_t IM : 1; // ÎŞĞ§²Ù×÷ÆÁ±Î
-		uint16_t DM : 1; // ·Ç¹æ¸ñ»¯ÆÁ±Î
-		uint16_t ZM : 1; // ³ıÁãÆÁ±Î
-		uint16_t OM : 1; // Òç³öÆÁ±Î
-		uint16_t UM : 1; // ÏÂÒçÆÁ±Î
-		uint16_t PM : 1; // ¾«¶ÈÆÁ±Î
+		uint16_t IM : 1; // æ— æ•ˆæ“ä½œå±è”½
+		uint16_t DM : 1; // éè§„æ ¼åŒ–å±è”½
+		uint16_t ZM : 1; // é™¤é›¶å±è”½
+		uint16_t OM : 1; // æº¢å‡ºå±è”½
+		uint16_t UM : 1; // ä¸‹æº¢å±è”½
+		uint16_t PM : 1; // ç²¾åº¦å±è”½
 		uint16_t Reserved : 2;
-		uint16_t PC : 2; // ¾«¶È¿ØÖÆ (00=24bit, 10=53bit, 11=64bit)
-		uint16_t RC : 2; // ÉáÈë¿ØÖÆ
-		uint16_t IC : 1; // ÎŞÇî¿ØÖÆ
+		uint16_t PC : 2; // ç²¾åº¦æ§åˆ¶ (00=24bit, 10=53bit, 11=64bit)
+		uint16_t RC : 2; // èˆå…¥æ§åˆ¶
+		uint16_t IC : 1; // æ— ç©·æ§åˆ¶
 		uint16_t Reserved2 : 3;
 	};
-} FPU_CONTROL_WORD;
-
+} FPU_CONTROL_uint16_t;
 typedef struct {
-	// ÎïÀí¼Ä´æÆ÷´æ´¢ (Ä£Äâ R0-R7)
-	// ¾¡¹Ü x87 ÊÇ 80 Î»À©Õ¹¾«¶È£¬µ«ÔÚÄ£ÄâÆ÷ÖĞÎÒÃÇÓÃ double (64Î») ½üËÆ
+	// ç‰©ç†å¯„å­˜å™¨å­˜å‚¨ (æ¨¡æ‹Ÿ R0-R7)
+	// å°½ç®¡ x87 æ˜¯ 80 ä½æ‰©å±•ç²¾åº¦ï¼Œä½†åœ¨æ¨¡æ‹Ÿå™¨ä¸­æˆ‘ä»¬ç”¨ double (64ä½) è¿‘ä¼¼
 	double Regs[8];
-	FPU_STATUS_WORD SW;
-	FPU_CONTROL_WORD CW;
-	uint16_t TW; // Tag Word (Ôİ¼ò»¯)
+	FPU_STATUS_uint16_t SW;
+	FPU_CONTROL_uint16_t CW;
+	uint16_t TW; // Tag uint16_t (æš‚ç®€åŒ–)
 } FPU_Context;
 
+//tang
+#define I_EAX	0
+#define I_ECX	1
+#define I_EDX	2
+#define I_EBX	3
+#define I_ESP	4
+#define I_EBP	5
+#define I_ESI	6
+#define I_EDI	7
+
 typedef struct {
-	//Í¨ÓÃ¼Ä´æÆ÷
+	//é€šç”¨å¯„å­˜å™¨
 	union {
 		REG32 GPR[8];
 		struct {
@@ -79,46 +84,45 @@ typedef struct {
 			REG32 EDI;
 		};
 	};
-	//Ö¸ÁîÖ¸Õë
-	DWORD EIP;
+	//æŒ‡ä»¤æŒ‡é’ˆ
+	uint32_t EIP;
 	union {
-		DWORD Value;           // ÕûÌå¶ÁĞ´ -> ctx.EFLAGS.Value
-		struct {               // °´Î»·ÃÎÊ -> ctx.EFLAGS.Bits.ZF
-			DWORD CF : 1;
-			DWORD : 1;     // ±£ÁôÎ»
-			DWORD PF : 1;
-			DWORD : 1;
-			DWORD AF : 1;
-			DWORD : 1;
-			DWORD ZF : 1;
-			DWORD SF : 1;
-			DWORD TF : 1;
-			DWORD IF : 1;
-			DWORD DF : 1;
-			DWORD OF : 1;
-			DWORD IOPL : 2;
-			DWORD NT : 1;
-			DWORD : 15;
+		uint32_t Value;           // æ•´ä½“è¯»å†™ -> ctx.EFLAGS.Value
+		struct {               // æŒ‰ä½è®¿é—® -> ctx.EFLAGS.Bits.ZF
+			uint32_t CF : 1;
+			uint32_t : 1;     // ä¿ç•™ä½
+			uint32_t PF : 1;
+			uint32_t : 1;
+			uint32_t AF : 1;
+			uint32_t : 1;
+			uint32_t ZF : 1;
+			uint32_t SF : 1;
+			uint32_t TF : 1;
+			uint32_t IF : 1;
+			uint32_t DF : 1;
+			uint32_t OF : 1;
+			uint32_t IOPL : 2;
+			uint32_t NT : 1;
+			uint32_t : 15;
 		};
 	} EFLAGS;
-	//¶Î¼Ä´æÆ÷
+	//æ®µå¯„å­˜å™¨
 	union {
-		WORD seg[6];
+		uint16_t seg[6];
 		struct {
-			WORD ES;
-			WORD CS;
-			WORD SS;
-			WORD DS;
-			WORD FS;
-			WORD GS;
+			uint16_t ES;
+			uint16_t CS;
+			uint16_t SS;
+			uint16_t DS;
+			uint16_t FS;
+			uint16_t GS;
 		};
 	};
-	FPU_Context FPU;// FPU ×ÓÏµÍ³
-	bool Halted;// ÔËĞĞ¿ØÖÆ
+	FPU_Context FPU;// FPU å­ç³»ç»Ÿ
+	bool Halted;// è¿è¡Œæ§åˆ¶
 }CPU_Context;
 
-
-// ¶¨Òå²Ù×÷ÀàĞÍ£¬ÓÃÓÚ±êÖ¾Î»¼ÆËã
+// å®šä¹‰æ“ä½œç±»å‹ï¼Œç”¨äºæ ‡å¿—ä½è®¡ç®—
 typedef enum {
 	ALU_ADD,
 	ALU_OR,
@@ -131,18 +135,12 @@ typedef enum {
 	ALU_INC,
 	ALU_DEC
 } ALU_Op;
-
-//ÔËĞĞCPUÄ£ÄâÆ÷ºËĞÄº¯Êı,stepÎªÖ´ĞĞ²½Êı
+//è¿è¡ŒCPUæ¨¡æ‹Ÿå™¨æ ¸å¿ƒå‡½æ•°,stepä¸ºæ‰§è¡Œæ­¥æ•°
 int runcpu(CPU_Context* p, int step);
-//ÄÚ´æ¶Á¸¨Öúº¯Êı,·µ»Ø¶ÁÈ¡µÄÖµ
-uint32_t MemRead(uint32_t addr, int byte_len);
-//ÄÚ´æĞ´¸¨Öúº¯Êı
-void MemWrite(uint32_t addr, uint32_t val, int byte_len);
-
-
-
-
-
+//å†…å­˜è¯»è¾…åŠ©å‡½æ•°,è¿”å›è¯»å–çš„å€¼
+uint32_t MemRead(uint32_t addr, int uint8_t_len);
+//å†…å­˜å†™è¾…åŠ©å‡½æ•°
+void MemWrite(uint32_t addr, uint32_t val, int uint8_t_len);
 
 
 

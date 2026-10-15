@@ -1,0 +1,6 @@
+[submodule "Core-x86-Disassembler"]
+	path = deps/Core-x86-Disassembler
+	url = https://github.com/582835293/Core-x86-Disassembler.git
+[submodule "PETools"]
+	path = deps/PETools
+	url = https://github.com/582835293/PETools.git

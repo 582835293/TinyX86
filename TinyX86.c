@@ -1,46 +1,47 @@
-// x86-emulator_v1.0.cpp : ´ËÎÄ¼ş°üº¬ "main" º¯Êı¡£³ÌĞòÖ´ĞĞ½«ÔÚ´Ë´¦¿ªÊ¼²¢½áÊø¡£
+ï»¿// x86-emulator_v1.0.cpp : æ­¤æ–‡ä»¶åŒ…å« "main" å‡½æ•°ã€‚ç¨‹åºæ‰§è¡Œå°†åœ¨æ­¤å¤„å¼€å§‹å¹¶ç»“æŸã€‚
 //
 
 #include "TinyX86.h"
-#include <stdio.h> // ÓÃÓÚprintfµ÷ÊÔ
-#include <math.h> // ĞèÒª math.h Ö§³Ö double ÔËËã
+#include <stdio.h> // ç”¨äºprintfè°ƒè¯•
+#include <stdlib.h>
+#include <math.h> // éœ€è¦ math.h æ”¯æŒ double è¿ç®—
 
-// === Ö´ĞĞÓëµ÷¶È ===
-static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx); // Ö´ĞĞÖ¸Áî£¬·µ»ØÊÇ·ñÌø×ª
+// === æ‰§è¡Œä¸è°ƒåº¦ ===
+static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx); // æ‰§è¡ŒæŒ‡ä»¤ï¼Œè¿”å›æ˜¯å¦è·³è½¬
 
-// === ¼Ä´æÆ÷/ÄÚ´æÓë²Ù×÷Êı¸¨Öú ===
-static uint32_t ReadGPR(CPU_Context* ctx, int reg_index, int size); // ¶ÁÈ¡Í¨ÓÃ¼Ä´æÆ÷
-static bool WriteGPR(CPU_Context* ctx, int reg_index, int size, uint32_t value); // Ğ´ÈëÍ¨ÓÃ¼Ä´æÆ÷
-static uint32_t GetEffectiveAddress(CPU_Context* ctx, DecodeContext* d_ctx); // ¼ÆËãÓĞĞ§µØÖ·
-static uint32_t GetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx); // »ñÈ¡²Ù×÷ÊıÖµ
-static void SetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx, uint32_t value); // Ğ´Èë²Ù×÷ÊıÖµ
-static int GetOperandBitSize(CPU_Context* ctx, DecodeContext* d_ctx, OperandType type); // »ñÈ¡²Ù×÷ÊıÎ»¿í
+// === å¯„å­˜å™¨/å†…å­˜ä¸æ“ä½œæ•°è¾…åŠ© ===
+static uint32_t ReadGPR(CPU_Context* ctx, int reg_index, int size); // è¯»å–é€šç”¨å¯„å­˜å™¨
+static bool WriteGPR(CPU_Context* ctx, int reg_index, int size, uint32_t value); // å†™å…¥é€šç”¨å¯„å­˜å™¨
+static uint32_t GetEffectiveAddress(CPU_Context* ctx, DecodeContext* d_ctx); // è®¡ç®—æœ‰æ•ˆåœ°å€
+static uint32_t GetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx); // è·å–æ“ä½œæ•°å€¼
+static void SetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx, uint32_t value); // å†™å…¥æ“ä½œæ•°å€¼
+static int GetOperandBitSize(CPU_Context* ctx, DecodeContext* d_ctx, OperandType type); // è·å–æ“ä½œæ•°ä½å®½
 
-// === ±êÖ¾Î»ÓëËãÊõÂß¼­ ===
-static int CalcPF(uint8_t res); // ¼ÆËãÆæÅ¼Ğ£ÑéÎ»
-static void UpdateEFLAGS(CPU_Context* ctx, uint32_t res, uint32_t dest, uint32_t src, int size, ALU_Op op); // ¸üĞÂ EFLAGS
-static void UpdateLogicFlags(CPU_Context* ctx, uint32_t res, int size); // ¸üĞÂÂß¼­±êÖ¾Î»
-static void Exec_ALU_Generic(CPU_Context* ctx, DecodeContext* d_ctx, ALU_Op op, bool is_compare); // Í¨ÓÃ ALU
-static void Exec_Group1(CPU_Context* ctx, DecodeContext* d_ctx); // Group 1 Á¢¼´Êı ALU
-static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx); // Group 2 ÒÆÎ»/Ğı×ª
-static uint32_t GetGroup3Source(CPU_Context* ctx, DecodeContext* d_ctx); // Group 3 Ô´²Ù×÷Êı
-static void SetGroup3Dest(CPU_Context* ctx, DecodeContext* d_ctx, uint32_t val); // Group 3 Ğ´»Ø
-static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx); // Group 3 ³Ë³ıÀà
+// === æ ‡å¿—ä½ä¸ç®—æœ¯é€»è¾‘ ===
+static int CalcPF(uint8_t res); // è®¡ç®—å¥‡å¶æ ¡éªŒä½
+static void UpdateEFLAGS(CPU_Context* ctx, uint32_t res, uint32_t dest, uint32_t src, int size, ALU_Op op); // æ›´æ–° EFLAGS
+static void UpdateLogicFlags(CPU_Context* ctx, uint32_t res, int size); // æ›´æ–°é€»è¾‘æ ‡å¿—ä½
+static void Exec_ALU_Generic(CPU_Context* ctx, DecodeContext* d_ctx, ALU_Op op, bool is_compare); // é€šç”¨ ALU
+static void Exec_Group1(CPU_Context* ctx, DecodeContext* d_ctx); // Group 1 ç«‹å³æ•° ALU
+static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx); // Group 2 ç§»ä½/æ—‹è½¬
+static uint32_t GetGroup3Source(CPU_Context* ctx, DecodeContext* d_ctx); // Group 3 æºæ“ä½œæ•°
+static void SetGroup3Dest(CPU_Context* ctx, DecodeContext* d_ctx, uint32_t val); // Group 3 å†™å›
+static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx); // Group 3 ä¹˜é™¤ç±»
 static void Exec_Group4(CPU_Context* ctx, DecodeContext* d_ctx); // Group 4 INC/DEC
-static bool Exec_Group5(CPU_Context* ctx, DecodeContext* d_ctx); // Group 5 ¿ØÖÆ/Õ»
-static void Exec_IMUL_2_Op(CPU_Context* ctx, DecodeContext* d_ctx); // IMUL Ë«²Ù×÷Êı
+static bool Exec_Group5(CPU_Context* ctx, DecodeContext* d_ctx); // Group 5 æ§åˆ¶/æ ˆ
+static void Exec_IMUL_2_Op(CPU_Context* ctx, DecodeContext* d_ctx); // IMUL åŒæ“ä½œæ•°
 static void Exec_INC(CPU_Context* ctx, DecodeContext* d_ctx); // INC
 static void Exec_DEC(CPU_Context* ctx, DecodeContext* d_ctx); // DEC
 
-// === Êı¾İ´«ËÍÓëÀ©Õ¹ ===
+// === æ•°æ®ä¼ é€ä¸æ‰©å±• ===
 static void Exec_MOV_Generic(CPU_Context* ctx, DecodeContext* d_ctx); // MOV r, imm
-static void Exec_MOVZX(CPU_Context* ctx, DecodeContext* d_ctx, int src_bits); // MOVZX ÁãÀ©Õ¹
-static void Exec_MOVSX(CPU_Context* ctx, DecodeContext* d_ctx, int src_bits); // MOVSX ·ûºÅÀ©Õ¹
+static void Exec_MOVZX(CPU_Context* ctx, DecodeContext* d_ctx, int src_bits); // MOVZX é›¶æ‰©å±•
+static void Exec_MOVSX(CPU_Context* ctx, DecodeContext* d_ctx, int src_bits); // MOVSX ç¬¦å·æ‰©å±•
 static void Exec_SignExtend(CPU_Context* ctx, DecodeContext* d_ctx); // CBW/CWDE/CWD/CDQ
 static void Exec_LEA(CPU_Context* ctx, DecodeContext* d_ctx); // LEA
 static void Exec_XCHG(CPU_Context* ctx, DecodeContext* d_ctx); // XCHG
 
-// === Õ»Óë±êÖ¾Î»Õ»²Ù×÷ ===
+// === æ ˆä¸æ ‡å¿—ä½æ ˆæ“ä½œ ===
 static void Exec_PUSH(CPU_Context* ctx, DecodeContext* d_ctx); // PUSH
 static void Exec_POP(CPU_Context* ctx, DecodeContext* d_ctx); // POP
 static void Exec_PUSHA(CPU_Context* ctx, DecodeContext* d_ctx); // PUSHA
@@ -49,12 +50,12 @@ static void Exec_PUSHF(CPU_Context* ctx); // PUSHF
 static void Exec_POPF(CPU_Context* ctx); // POPF
 static void Exec_ENTER(CPU_Context* ctx, DecodeContext* d_ctx); // ENTER
 static void Exec_LEAVE(CPU_Context* ctx); // LEAVE
-static uint32_t PackEFLAGS(CPU_Context* ctx); // ´ò°ü EFLAGS
-static void UnpackEFLAGS(CPU_Context* ctx, uint32_t val); // ½â°ü EFLAGS
+static uint32_t PackEFLAGS(CPU_Context* ctx); // æ‰“åŒ… EFLAGS
+static void UnpackEFLAGS(CPU_Context* ctx, uint32_t val); // è§£åŒ… EFLAGS
 
-// === Ìõ¼ş/¿ØÖÆÁ÷ ===
-static bool CheckCondition(CPU_Context* ctx, uint8_t condition_code); // ¼ì²éÌõ¼şÂë
-static bool Exec_Branch(CPU_Context* ctx, DecodeContext* d_ctx, bool is_conditional); // Ïà¶ÔÌø×ª
+// === æ¡ä»¶/æ§åˆ¶æµ ===
+static bool CheckCondition(CPU_Context* ctx, uint8_t condition_code); // æ£€æŸ¥æ¡ä»¶ç 
+static bool Exec_Branch(CPU_Context* ctx, DecodeContext* d_ctx, bool is_conditional); // ç›¸å¯¹è·³è½¬
 static bool Exec_CALL(CPU_Context* ctx, DecodeContext* d_ctx); // CALL
 static bool Exec_RET(CPU_Context* ctx, DecodeContext* d_ctx); // RET
 static bool Exec_LOOP(CPU_Context* ctx, DecodeContext* d_ctx); // LOOP
@@ -64,45 +65,74 @@ static void Exec_INT(CPU_Context* ctx, DecodeContext* d_ctx); // INT
 static void Exec_SAHF(CPU_Context* ctx); // SAHF
 static void Exec_LAHF(CPU_Context* ctx); // LAHF
 
-// === ´®²Ù×÷ ===
-static void Exec_StringOp(CPU_Context* ctx, DecodeContext* d_ctx); // ´®²Ù×÷
-static bool Exec_REP_StringOp(CPU_Context* ctx, DecodeContext* d_ctx); // REP ´®²Ù×÷
+// === ä¸²æ“ä½œ ===
+static void Exec_StringOp(CPU_Context* ctx, DecodeContext* d_ctx); // ä¸²æ“ä½œ
+static bool Exec_REP_StringOp(CPU_Context* ctx, DecodeContext* d_ctx); // REP ä¸²æ“ä½œ
 
 // === FPU ===
-static void FPU_PUSH(CPU_Context* ctx, double val); // FPU Ñ¹Õ»
-static double FPU_POP(CPU_Context* ctx); // FPU µ¯Õ»
-static double MemReadF(uint32_t addr, int size); // ¶ÁÈ¡¸¡µãÄÚ´æ
-static void MemWriteF(uint32_t addr, double val, int size); // Ğ´Èë¸¡µãÄÚ´æ
-static void UpdateFPUFlags(CPU_Context* ctx, double v1, double v2); // ¸üĞÂ FPU ±È½Ï±êÖ¾
-static double MemReadI(uint32_t addr, int size); // ¶ÁÈ¡ÕûÊıÄÚ´æÎª double
-static void MemWriteI(uint32_t addr, double val, int size); // Ğ´Èë double ÎªÕûÊı
-static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx); // FPU Ö¸ÁîÖ´ĞĞÆ÷
+static void FPU_PUSH(CPU_Context* ctx, double val); // FPU å‹æ ˆ
+static double FPU_POP(CPU_Context* ctx); // FPU å¼¹æ ˆ
+static double MemReadF(uint32_t addr, int size); // è¯»å–æµ®ç‚¹å†…å­˜
+static void MemWriteF(uint32_t addr, double val, int size); // å†™å…¥æµ®ç‚¹å†…å­˜
+static void UpdateFPUFlags(CPU_Context* ctx, double v1, double v2); // æ›´æ–° FPU æ¯”è¾ƒæ ‡å¿—
+static double MemReadI(uint32_t addr, int size); // è¯»å–æ•´æ•°å†…å­˜ä¸º double
+static void MemWriteI(uint32_t addr, double val, int size); // å†™å…¥ double ä¸ºæ•´æ•°
+static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx); // FPU æŒ‡ä»¤æ‰§è¡Œå™¨
+
+//tang
+int OffsetByte[] =
+{
+	0 + 4 * 0,
+	0 + 4 * 1,
+	0 + 4 * 2,
+	0 + 4 * 3,
+
+	1 + 4 * 0,
+	1 + 4 * 1,
+	1 + 4 * 2,
+	1 + 4 * 3
+};
 
 int runcpu(CPU_Context* p, int step)
 {
 	DecodeContext d_ctx;
 	int instr_len = 0;
 	for (int i = 0; i < step; i++) {
-		// 0.¡¾ĞÂÔö¡¿¼ì²éÊÇ·ñÍ£»ú
+		// 0.ã€æ–°å¢ã€‘æ£€æŸ¥æ˜¯å¦åœæœº
 		if(p->Halted) {
 			printf("[System] CPU Halted.\n");
 			break;
 		}
-		// 1. È¡Ö¸Óë½âÂë (Fetch & Decode)
-		// Ö±½Ó¶ÁÈ¡ËŞÖ÷ÄÚ´æµØÖ· p->EIP
+		//tang
+		//if ((0xF8 & *(uint8_t*)p->EIP) == 0xb0)
+		//{
+		//	instr_len = 2;
+		//	((uint8_t*)&p->EAX)[OffsetByte[7 & *(uint8_t*)p->EIP]] = *(uint8_t*)(1 + p->EIP);
+
+		//}
+
+		//if ((0xF8 & *(uint8_t*)p->EIP) == 0xb8)
+		//{
+		//	instr_len = 5;
+		//	((uint32_t*)&p->EAX)[7&*(uint8_t*)p->EIP] = *(uint32_t*)(1 + p->EIP);
+		//}
+
+
+		// 1. å–æŒ‡ä¸è§£ç  (Fetch & Decode)
+		// ç›´æ¥è¯»å–å®¿ä¸»å†…å­˜åœ°å€ p->EIP
 		instr_len = ParseInstuction((uint8_t*)p->EIP, p->EIP, &d_ctx);
-		FormatInstruction((uint8_t*)p->EIP, &d_ctx);//¿ÉÑ¡£¬ÏÔÊ¾»ã±àÖ¸Áî£¬»áÏûºÄ¶îÍâµÄcpuĞÔÄÜ£¬ÊÊºÏµ÷ÊÔÊ±Ê¹ÓÃ
+		FormatInstruction((uint8_t*)p->EIP, &d_ctx);//å¯é€‰ï¼Œæ˜¾ç¤ºæ±‡ç¼–æŒ‡ä»¤ï¼Œä¼šæ¶ˆè€—é¢å¤–çš„cpuæ€§èƒ½ï¼Œé€‚åˆè°ƒè¯•æ—¶ä½¿ç”¨
 		if (instr_len <= 0) {
 			printf("Error: Decoding failed at EIP: 0x%08X\n", p->EIP);
 			return -1;
 		}
-		// 2. Ö´ĞĞÖ¸Áî (Execute)
-		// ´«µİ instr_len ¸øÖ´ĞĞº¯Êı£¬ÒòÎª JMP ĞèÒª»ùÓÚ (EIP + len) ¼ÆËãÌø×ªÄ¿±ê
+		// 2. æ‰§è¡ŒæŒ‡ä»¤ (Execute)
+		// ä¼ é€’ instr_len ç»™æ‰§è¡Œå‡½æ•°ï¼Œå› ä¸º JMP éœ€è¦åŸºäº (EIP + len) è®¡ç®—è·³è½¬ç›®æ ‡
 		bool jumped = ExecuteInstruction(p, &d_ctx);
-		// 3. ¸üĞÂ EIP Ö¸ÏòÏÂÒ»ÌõÖ¸Áî
-		// ½öµ±Ã»ÓĞ·¢ÉúÌø×ªÊ±£¬²ÅÍÆ½ø EIP
+		// 3. æ›´æ–° EIP æŒ‡å‘ä¸‹ä¸€æ¡æŒ‡ä»¤
+		// ä»…å½“æ²¡æœ‰å‘ç”Ÿè·³è½¬æ—¶ï¼Œæ‰æ¨è¿› EIP
 		if (!jumped) p->EIP += instr_len;
-		// µ÷ÊÔ´òÓ¡ (¿ÉÑ¡£¬ÓÃÓÚ¹Û²ì Sprint 1 Ğ§¹û)
+		// è°ƒè¯•æ‰“å° (å¯é€‰ï¼Œç”¨äºè§‚å¯Ÿ Sprint 1 æ•ˆæœ)
 		//printf("[Trace] EIP=0x%08X |  %s | Len: %d\n", p->EIP, d_ctx.asm_str, instr_len);
 
 	}
@@ -110,13 +140,13 @@ int runcpu(CPU_Context* p, int step)
 }
 
 
-// Ö´ĞĞ·Ö·¢Æ÷
+// æ‰§è¡Œåˆ†å‘å™¨
 static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// Ä¬ÈÏ²»Ìø×ª
+	// é»˜è®¤ä¸è·³è½¬
 	bool jumped = false;
 
 	// ========================================================
-		// ·ÖÖ§ A: ´¦ÀíË«×Ö½ÚÖ¸Áî (0x0F B6 ...)
+		// åˆ†æ”¯ A: å¤„ç†åŒå­—èŠ‚æŒ‡ä»¤ (0x0F B6 ...)
 		// ========================================================
 	if (d_ctx->is_two_byte_opcode) {
 		switch (d_ctx->opcode) {
@@ -132,11 +162,11 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 			case 0x80: case 0x81: case 0x82: case 0x83:
 			case 0x84: case 0x85: case 0x86: case 0x87:
 			case 0x88: case 0x89: case 0x8A: case 0x8B:
-			case 0x8C: case 0x8D: case 0x8E: case 0x8F:// Ö±½Ó¸´ÓÃ Exec_Branch£¡
-				jumped = Exec_Branch(ctx, d_ctx, true);// ÕâÀïµÄ opcode µÍ4Î»ÍêÃÀ¶ÔÓ¦ CheckCondition µÄÌõ¼şÂë
-				break;// d_ctx->imm ÒÑ¾­ÊÇ 16/32 Î»Æ«ÒÆ
+			case 0x8C: case 0x8D: case 0x8E: case 0x8F:// ç›´æ¥å¤ç”¨ Exec_Branchï¼
+				jumped = Exec_Branch(ctx, d_ctx, true);// è¿™é‡Œçš„ opcode ä½4ä½å®Œç¾å¯¹åº” CheckCondition çš„æ¡ä»¶ç 
+				break;// d_ctx->imm å·²ç»æ˜¯ 16/32 ä½åç§»
 
-			// SETcc (0x90 - 0x9F) - Ö®Ç°ÊµÏÖµÄ
+			// SETcc (0x90 - 0x9F) - ä¹‹å‰å®ç°çš„
 			case 0x90: case 0x91: case 0x92: case 0x93:
 			case 0x94: case 0x95: case 0x96: case 0x97:
 			case 0x98: case 0x99: case 0x9A: case 0x9B:
@@ -144,43 +174,43 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 				Exec_SETcc(ctx, d_ctx);break;
 
 				// --- FS/GS PUSH/POP (0x0F A0 - 0x0F A9) ---
-						// ÕâÀïµÄ opcode À´×Ô two_byte_opcode_table
+						// è¿™é‡Œçš„ opcode æ¥è‡ª two_uint8_t_opcode_table
 			case 0xA0: case 0xA8: // PUSH FS, PUSH GS
 				Exec_PUSH(ctx, d_ctx);break;
 			case 0xA1: case 0xA9: // POP FS, POP GS
 				Exec_POP(ctx, d_ctx);break;
 
 		
-			// --- IMUL (Ë«²Ù×÷Êı Gv, Ev) ---
+			// --- IMUL (åŒæ“ä½œæ•° Gv, Ev) ---
 			case 0xAF:
 				Exec_IMUL_2_Op(ctx, d_ctx);break;
 			// --- MOVZX (0xB6, 0xB7) ---
-			case 0xB6: Exec_MOVZX(ctx, d_ctx, 8);  break; // Byte -> Dword
-			case 0xB7: Exec_MOVZX(ctx, d_ctx, 16); break; // Word -> Dword
+			case 0xB6: Exec_MOVZX(ctx, d_ctx, 8);  break; // uint8_t -> Duint16_t
+			case 0xB7: Exec_MOVZX(ctx, d_ctx, 16); break; // uint16_t -> Duint16_t
 			// --- MOVSX (0xBE, 0xBF) ---
-			case 0xBE: Exec_MOVSX(ctx, d_ctx, 8);  break; // Byte -> Dword
-			case 0xBF: Exec_MOVSX(ctx, d_ctx, 16); break; // Word -> Dword
+			case 0xBE: Exec_MOVSX(ctx, d_ctx, 8);  break; // uint8_t -> Duint16_t
+			case 0xBF: Exec_MOVSX(ctx, d_ctx, 16); break; // uint16_t -> Duint16_t
 
 			default:
-				printf("[CPU Error] Unimplemented 2-byte opcode: 0x0F %02X\n", d_ctx->opcode);
+				printf("[CPU Error] Unimplemented 2-uint8_t opcode: 0x0F %02X\n", d_ctx->opcode);
 		}
-		return jumped;// Ë«×Ö½ÚÖ¸Áî´ó¶à²»Éæ¼°Ìø×ª (³ıÁË³¤Ìø×ª 0x8x)
+		return jumped;// åŒå­—èŠ‚æŒ‡ä»¤å¤§å¤šä¸æ¶‰åŠè·³è½¬ (é™¤äº†é•¿è·³è½¬ 0x8x)
 	}
 
 	// ========================================================
-	// ·ÖÖ§ B: ´¦Àíµ¥×Ö½ÚÖ¸Áî
+	// åˆ†æ”¯ B: å¤„ç†å•å­—èŠ‚æŒ‡ä»¤
 	// ========================================================
 	switch (d_ctx->opcode) {
 		
 
 		// ==========================================
-		// Group A: Êı¾İ´«ËÍ (Data Transfer)
+		// Group A: æ•°æ®ä¼ é€ (Data Transfer)
 		// ==========================================
 		// 
 			// MOV r/m, r (0x88 - 0x8B)
 		case 0x88: case 0x89: case 0x8A: case 0x8B:
-		case 0x8C:          // ĞÂÔö: MOV r/m, seg
-		case 0x8E:          // ĞÂÔö: MOV seg, r/m
+		case 0x8C:          // æ–°å¢: MOV r/m, seg
+		case 0x8E:          // æ–°å¢: MOV seg, r/m
 		case 0xB0: case 0xB1: case 0xB2: case 0xB3:
 		case 0xB4: case 0xB5: case 0xB6: case 0xB7:
 		case 0xB8: case 0xB9: case 0xBA: case 0xBB:
@@ -189,8 +219,8 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 			Exec_MOV_Generic(ctx, d_ctx); break;
 
 		case 0xA0: // MOV AL, moffs8
-			// Ö¸Áî¸ñÊ½£ºA0 [offset32]
-			// ×¢Òâ£ºÕâÀïµÄ d_ctx->imm Ó¦¸ÃÊÇ½âÂë½×¶Î¶ÁÈ¡µ½µÄ 4 ×Ö½ÚµØÖ·Æ«ÒÆ
+			// æŒ‡ä»¤æ ¼å¼ï¼šA0 [offset32]
+			// æ³¨æ„ï¼šè¿™é‡Œçš„ d_ctx->imm åº”è¯¥æ˜¯è§£ç é˜¶æ®µè¯»å–åˆ°çš„ 4 å­—èŠ‚åœ°å€åç§»
 			ctx->GPR[0].I8.L = (uint8_t)MemRead(d_ctx->imm, 1);
 			break;
 
@@ -212,19 +242,19 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 		}
 		break;
 
-		case 0x8D: Exec_LEA(ctx, d_ctx); break; // LEA Ö¸Áî
+		case 0x8D: Exec_LEA(ctx, d_ctx); break; // LEA æŒ‡ä»¤
 		case 0x90: break; // NOP
 		case 0x86:case 0x87: // XCHG Eb, Gb / Ev, Gv
 		case 0x91:case 0x92: case 0x93: case 0x94: case 0x95:case 0x96:case 0x97: // XCHG EAX, reg
 			Exec_XCHG(ctx, d_ctx); break;
 
-			// --- ·ûºÅÀ©Õ¹ (0x98, 0x99) ---
+			// --- ç¬¦å·æ‰©å±• (0x98, 0x99) ---
 		case 0x98: // CBW / CWDE
 		case 0x99: // CWD / CDQ
 			Exec_SignExtend(ctx, d_ctx); break;
 
 		// ==========================================
-		// Group B: Õ»²Ù×÷ (Stack)
+		// Group B: æ ˆæ“ä½œ (Stack)
 		// ==========================================
 		// 
 		// --- PUSH / POP ---
@@ -249,31 +279,31 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 			Exec_LEAVE(ctx); break; // LEAVE
 
 		// ==========================================
-		// Group C: ËãÊõÔËËã (ALU)
+		// Group C: ç®—æœ¯è¿ç®— (ALU)
 		// ==========================================
 		// 
 		// ADD, OR, ADC, SBB, AND, SUB, XOR, CMP (0x00 - 0x3D
-			// ±ê×¼ ADD (Gv, Ev µÈ)
+			// æ ‡å‡† ADD (Gv, Ev ç­‰)
 		case 0x00: case 0x01: case 0x02: case 0x03: case 0x04: case 0x05:
 			Exec_ALU_Generic(ctx, d_ctx, ALU_ADD, false); break;
-			//±ê×¼ OR
+			//æ ‡å‡† OR
 		case 0x08: case 0x09: case 0x0A: case 0x0B: case 0x0C: case 0x0D:
 			Exec_ALU_Generic(ctx, d_ctx, ALU_OR, false); break;
-			//±ê×¼ADC
+			//æ ‡å‡†ADC
 		case 0x10: case 0x11: case 0x12: case 0x13: case 0x14: case 0x15:
 			Exec_ALU_Generic(ctx, d_ctx, ALU_ADC, false); break;
-			//±ê×¼SBB
+			//æ ‡å‡†SBB
 		case 0x18: case 0x19: case 0x1A: case 0x1B: case 0x1C: case 0x1D:
 			Exec_ALU_Generic(ctx, d_ctx, ALU_SBB, false); break;
-			// ±ê×¼ AND
+			// æ ‡å‡† AND
 		case 0x20: case 0x21: case 0x22: case 0x23: case 0x24: case 0x25:
 			Exec_ALU_Generic(ctx, d_ctx, ALU_AND, false); break;
-			// ±ê×¼ SUB
+			// æ ‡å‡† SUB
 		case 0x28: case 0x29: case 0x2A: case 0x2B: case 0x2C: case 0x2D:
 			Exec_ALU_Generic(ctx, d_ctx, ALU_SUB, false); break;
 		case 0x30: case 0x31: case 0x32: case 0x33: case 0x34: case 0x35: 
 			Exec_ALU_Generic(ctx, d_ctx, ALU_XOR, false); break;
-			// ±ê×¼ CMP
+			// æ ‡å‡† CMP
 		case 0x38: case 0x39: case 0x3A: case 0x3B: case 0x3C: case 0x3D:
 			Exec_ALU_Generic(ctx, d_ctx, ALU_CMP, true); break;
 			// Group 1: 0x80-0x83 (Immediate ALU):ADD, OR, ADC, SBB, AND, SUB, XOR, CMP
@@ -294,7 +324,7 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 			Exec_Group4(ctx, d_ctx); break; // Group 4 (INC/DEC Eb)
 
 		// ==========================================
-		// Group D: ÒÆÎ»²Ù×÷ (Shift/Rotate)
+		// Group D: ç§»ä½æ“ä½œ (Shift/Rotate)
 		// ==========================================
 		// 
 		// Group 2 (C0, C1, D0, D1, D2, D3)
@@ -304,7 +334,7 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 			Exec_Group2(ctx, d_ctx); break;
 
 		// ==========================================
-		// Group E: ´®²Ù×÷ (String)
+		// Group E: ä¸²æ“ä½œ (String)
 		// ==========================================
 		// 
 		case 0xA4: case 0xA5: // MOVS
@@ -316,11 +346,11 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 			else{Exec_StringOp(ctx, d_ctx); return false; }
 
 		// ==========================================
-		// Group F: ¿ØÖÆÁ÷ (Control Flow)
+		// Group F: æ§åˆ¶æµ (Control Flow)
 		// ==========================================
 		//	
 		// 	
-			// --- Jcc (Ìõ¼şÌø×ª) ---
+			// --- Jcc (æ¡ä»¶è·³è½¬) ---
 			// 0x70 - 0x7F (Short Jumps)
 		case 0x70: case 0x71: case 0x72: case 0x73:
 		case 0x74: case 0x75: case 0x76: case 0x77:
@@ -355,7 +385,7 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 			break;
 
 		// ==========================================
-		// Group G: ÏµÍ³Óë FPU (System & FPU)
+		// Group G: ç³»ç»Ÿä¸ FPU (System & FPU)
 		// ==========================================
 		case 0xCC: // INT 3
 		case 0xCD: // INT Ib
@@ -387,9 +417,9 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 		case 0xF4: // HLT
 			ctx->Halted = true; break;
 		// ==========================================
-		// Group I: Î´ÊµÏÖ
+		// Group I: æœªå®ç°
 		// =========================================
-		case 0x26: case 0x2E: case 0x36: case 0x3E: // ¶Î³¬Ô½Ç°×º (Í¨³£ÔÚ½âÂë²ã´¦Àí)
+		case 0x26: case 0x2E: case 0x36: case 0x3E: // æ®µè¶…è¶Šå‰ç¼€ (é€šå¸¸åœ¨è§£ç å±‚å¤„ç†)
 		case 0x62: // BOUND
 		case 0x63: // ARPL
 		case 0x64: case 0x65: // FS/GS Prefix
@@ -411,18 +441,18 @@ static bool ExecuteInstruction(CPU_Context* ctx, DecodeContext* d_ctx) {
 		case 0xEC: case 0xED: case 0xEE: case 0xEF: // IN / OUT (DX Port)
 		case 0xF0: // LOCK Prefix
 		case 0xF2: case 0xF3: // REPNE / REP Prefix
-			// ´Ë´¦¼ÇÂ¼ËùÓĞ 0x00-0xFF ·¶Î§ÄÚÉĞÎ´ÔÚÉÏ·½ Switch ·ÖÖ§ÖĞ´¦ÀíµÄÖ¸Áî
+			// æ­¤å¤„è®°å½•æ‰€æœ‰ 0x00-0xFF èŒƒå›´å†…å°šæœªåœ¨ä¸Šæ–¹ Switch åˆ†æ”¯ä¸­å¤„ç†çš„æŒ‡ä»¤
 		default:
 			printf("[CPU] Unimplemented Opcode: 0x%02X\n", d_ctx->opcode);
-			ctx->Halted = true; // Óöµ½·Ç·¨Ö¸ÁîÖ±½ÓÍ£»ú
+			ctx->Halted = true; // é‡åˆ°éæ³•æŒ‡ä»¤ç›´æ¥åœæœº
 			break;
 	}
 	return jumped;
 }
-// ¸¨Öúº¯Êı£º¸ù¾İË÷ÒıºÍ´óĞ¡¶ÁÈ¡Í¨ÓÃ¼Ä´æÆ÷
-// ctx: CPUÉÏÏÂÎÄ
-// reg_index: ¼Ä´æÆ÷Ë÷Òı (0-7)
-// size: ´óĞ¡ (8, 16, 32)
+// è¾…åŠ©å‡½æ•°ï¼šæ ¹æ®ç´¢å¼•å’Œå¤§å°è¯»å–é€šç”¨å¯„å­˜å™¨
+// ctx: CPUä¸Šä¸‹æ–‡
+// reg_index: å¯„å­˜å™¨ç´¢å¼• (0-7)
+// size: å¤§å° (8, 16, 32)
 static uint32_t ReadGPR(CPU_Context* ctx, int reg_index, int size) {
 	if(reg_index<0 || reg_index>=8) return 0;
 
@@ -439,8 +469,8 @@ static uint32_t ReadGPR(CPU_Context* ctx, int reg_index, int size) {
 	}
 	return 0;
 }
-// ¸¨Öúº¯Êı£ºĞ´ÈëÍ¨ÓÃ¼Ä´æÆ÷
-//0Ö´ĞĞ±¨´í£¬1³É¹¦
+// è¾…åŠ©å‡½æ•°ï¼šå†™å…¥é€šç”¨å¯„å­˜å™¨
+//0æ‰§è¡ŒæŠ¥é”™ï¼Œ1æˆåŠŸ
 static bool WriteGPR(CPU_Context* ctx, int reg_index, int size, uint32_t value) {
 	if (reg_index < 0 || reg_index >= 8) return 0;
 
@@ -448,14 +478,14 @@ static bool WriteGPR(CPU_Context* ctx, int reg_index, int size, uint32_t value) 
 		ctx->GPR[reg_index].I32 = value;
 	}
 	else if (size == 16) {
-		ctx->GPR[reg_index].I16 = (WORD)value;
+		ctx->GPR[reg_index].I16 = (uint16_t)value;
 	}
 	else if (size == 8) {
 		if (reg_index < 4) {
-			ctx->GPR[reg_index].I8.L = (BYTE)value;
+			ctx->GPR[reg_index].I8.L = (uint8_t)value;
 		}
 		else {
-			ctx->GPR[reg_index - 4].I8.H = (BYTE)value;
+			ctx->GPR[reg_index - 4].I8.H = (uint8_t)value;
 		}
 	}
 	return 1;
@@ -464,7 +494,7 @@ static bool WriteGPR(CPU_Context* ctx, int reg_index, int size, uint32_t value) 
 static uint32_t GetEffectiveAddress(CPU_Context* ctx, DecodeContext* d_ctx) {
 	uint32_t base = 0;
 	uint32_t index = 0;
-	// 1. ´¦Àí SIB Âß¼­
+	// 1. å¤„ç† SIB é€»è¾‘
 	if (d_ctx->has_sib) {
 		if (d_ctx->base != 5 && d_ctx->mod != 00) {
 			base = ReadGPR(ctx, d_ctx->base, 32);
@@ -472,11 +502,11 @@ static uint32_t GetEffectiveAddress(CPU_Context* ctx, DecodeContext* d_ctx) {
 		if (d_ctx->index != 4) {
 			index = ReadGPR(ctx, d_ctx->index, 32);
 		}
-		//·ñÔò±£³ÖÄ¬ÈÏÎª0
-	}// 2. ÎŞ SIB Âß¼­
+		//å¦åˆ™ä¿æŒé»˜è®¤ä¸º0
+	}// 2. æ—  SIB é€»è¾‘
 	else {
 		if (d_ctx->mod == 0 && d_ctx->rm == 5) {
-			base = 0; // disp32 Ö±½Ó×÷ÎªµØÖ·
+			base = 0; // disp32 ç›´æ¥ä½œä¸ºåœ°å€
 		}
 		else {
 			base = ReadGPR(ctx, d_ctx->rm, 32);
@@ -485,21 +515,21 @@ static uint32_t GetEffectiveAddress(CPU_Context* ctx, DecodeContext* d_ctx) {
 	return base + index * (1 << d_ctx->scale) + d_ctx->disp;
 }
 
-//²ÎÕÕFormatOperand¶ÔÓ¦ĞŞ¸Ä
+//å‚ç…§FormatOperandå¯¹åº”ä¿®æ”¹
 static uint32_t GetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx) {
 	OperandType type;
-	// ¸ù¾İË÷Òı»ñÈ¡ÀàĞÍ
+	// æ ¹æ®ç´¢å¼•è·å–ç±»å‹
 	if(op_idx == 0) type = d_ctx->entry.op1;
 	else if (op_idx == 1) type = d_ctx->entry.op2;
 	else type = d_ctx->entry.op3;
 
 	int op_size = (d_ctx->pfx_op_size == 0x66) ? 16 : 32;
 	switch (type) {
-		// --- ¼Ä´æÆ÷ ---
+		// --- å¯„å­˜å™¨ ---
 		case Gb: return ReadGPR(ctx, d_ctx->reg, 8);
 		case Gw: return ReadGPR(ctx, d_ctx->reg, 16);
 		case Gv: return ReadGPR(ctx, d_ctx->reg, op_size);
-		// ²¹³ä¶Ô OP_AL ... OP_rDI µÄÖ§³Ö
+		// è¡¥å……å¯¹ OP_AL ... OP_rDI çš„æ”¯æŒ
 		case OP_AL: return ReadGPR(ctx, 0, 8);
 		case OP_CL: return ReadGPR(ctx, 1, 8);
 		case OP_DL: return ReadGPR(ctx, 2, 8);
@@ -518,14 +548,14 @@ static uint32_t GetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_i
 		case OP_rSI: return ReadGPR(ctx, 6, op_size);
 		case OP_rDI: return ReadGPR(ctx, 7, op_size);
 
-		// --- ¶Î¼Ä´æÆ÷ (Sw: from ModRM.reg) ---
+		// --- æ®µå¯„å­˜å™¨ (Sw: from ModRM.reg) ---
 		case Sw:
-			// ctx->seg Êı×éË³Ğò: ES=0, CS=1, SS=2, DS=3, FS=4, GS=5
-			// d_ctx->reg ¸ÕºÃ¶ÔÓ¦Õâ¸öË÷Òı (0-5)
+			// ctx->seg æ•°ç»„é¡ºåº: ES=0, CS=1, SS=2, DS=3, FS=4, GS=5
+			// d_ctx->reg åˆšå¥½å¯¹åº”è¿™ä¸ªç´¢å¼• (0-5)
 			if (d_ctx->reg < 6) return ctx->seg[d_ctx->reg];
 			return 0;
 
-		// --- Ó²±àÂë¶Î¼Ä´æÆ÷ (OP_ES ... OP_GS) ---
+		// --- ç¡¬ç¼–ç æ®µå¯„å­˜å™¨ (OP_ES ... OP_GS) ---
 		case OP_ES: return ctx->ES;
 		case OP_CS: return ctx->CS;
 		case OP_SS: return ctx->SS;
@@ -534,45 +564,45 @@ static uint32_t GetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_i
 		case OP_GS: return ctx->GS;
 		
 
-		// --- ÄÚ´æ/¼Ä´æÆ÷ (ModR/M) ---
+		// --- å†…å­˜/å¯„å­˜å™¨ (ModR/M) ---
 		case Eb:
 		case Ew:
 		case Ev: {
 			if(d_ctx->mod == 3) {
-				// ¼Ä´æÆ÷Ö±½Ó·ÃÎÊ
+				// å¯„å­˜å™¨ç›´æ¥è®¿é—®
 				int size_E = (type == Eb) ? 8 : ((type == Ew) ? 16 : op_size);
 				return ReadGPR(ctx, d_ctx->rm, size_E);
 			}
 			else {
 				uint32_t addr = GetEffectiveAddress(ctx, d_ctx);
-				int byte_len = (type == Eb) ? 1 : ((type == Ew) ? 2 : (op_size / 8));
-				return MemRead(addr, byte_len); //¶ÁÈ¡ÄÚ´æ²¢·µ»Ø
+				int uint8_t_len = (type == Eb) ? 1 : ((type == Ew) ? 2 : (op_size / 8));
+				return MemRead(addr, uint8_t_len); //è¯»å–å†…å­˜å¹¶è¿”å›
 			}
 		}
-		// --- Á¢¼´Êı ---
+		// --- ç«‹å³æ•° ---
 		
-			// Á¢¼´ÊıÒÑ¾­½âÎöÔÚ imm / imm2 ×Ö¶ÎÖĞ
-			// ¼ÙÉè op1/op2 Ê¹ÓÃ imm£¬op3 Ê¹ÓÃ imm2 (¼«ÉÙ¼û)
-			// ¼òµ¥Æğ¼û£¬ÕâÀï¼ÙÉèÖ»ÓÃ imm¡£Èç¹ûÖ¸ÁîÓĞÁ½¸öÁ¢¼´Êı(Èç ENTER)£¬ĞèÅĞ¶Ï
+			// ç«‹å³æ•°å·²ç»è§£æåœ¨ imm / imm2 å­—æ®µä¸­
+			// å‡è®¾ op1/op2 ä½¿ç”¨ immï¼Œop3 ä½¿ç”¨ imm2 (æå°‘è§)
+			// ç®€å•èµ·è§ï¼Œè¿™é‡Œå‡è®¾åªç”¨ immã€‚å¦‚æœæŒ‡ä»¤æœ‰ä¸¤ä¸ªç«‹å³æ•°(å¦‚ ENTER)ï¼Œéœ€åˆ¤æ–­
 		case Ib: case Iw: case Iv: case Iz:
 			return (uint32_t)d_ctx->imm;
 
 		default:
-			return 0; // Ôİ²»Ö§³Ö»òÆäËûÀàĞÍ
+			return 0; // æš‚ä¸æ”¯æŒæˆ–å…¶ä»–ç±»å‹
 	}
 }
 
-//²ÎÕÕFormatOperand¶ÔÓ¦ĞŞ¸Ä
-// Ğ´Èë²Ù×÷ÊıµÄÖµ
+//å‚ç…§FormatOperandå¯¹åº”ä¿®æ”¹
+// å†™å…¥æ“ä½œæ•°çš„å€¼
 static void SetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx, uint32_t value) {
 	OperandType type = (op_idx == 0) ? d_ctx->entry.op1 : d_ctx->entry.op2;
 	int op_size = (d_ctx->pfx_op_size == 0x66) ? 16 : 32;
 	switch (type) {
-		// --- ¼Ä´æÆ÷ ---
+		// --- å¯„å­˜å™¨ ---
 		case Gb: WriteGPR(ctx, d_ctx->reg, 8, value); break;
 		case Gw: WriteGPR(ctx, d_ctx->reg, 16, value); break;
 		case Gv: WriteGPR(ctx, d_ctx->reg, op_size, value); break;
-		// --- ÄÚ´æ/¼Ä´æÆ÷ ---
+		// --- å†…å­˜/å¯„å­˜å™¨ ---
 		case Eb:
 		case Ew:
 		case Ev: {
@@ -582,12 +612,12 @@ static void SetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx, 
 			}
 			else {
 				uint32_t addr = GetEffectiveAddress(ctx, d_ctx);
-				int byte_len = (type == Eb) ? 1 : ((type == Ew) ? 2 : (op_size / 8));
-				MemWrite(addr, value, byte_len); // µ÷ÓÃÌáÈ¡³öÀ´µÄº¯Êı
+				int uint8_t_len = (type == Eb) ? 1 : ((type == Ew) ? 2 : (op_size / 8));
+				MemWrite(addr, value, uint8_t_len); // è°ƒç”¨æå–å‡ºæ¥çš„å‡½æ•°
 			}
 			break;
 		}
-		// ²¹³ä¶Ô OP_AL ... OP_rDI µÄÖ§³Ö
+		// è¡¥å……å¯¹ OP_AL ... OP_rDI çš„æ”¯æŒ
 		case OP_AL: WriteGPR(ctx, 0, 8, value); break;
 		case OP_CL: WriteGPR(ctx, 1, 8, value); break;
 		case OP_DL: WriteGPR(ctx, 2, 8, value); break;
@@ -605,15 +635,15 @@ static void SetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx, 
 		case OP_rBP: WriteGPR(ctx, 5, op_size, value); break;
 		case OP_rSI: WriteGPR(ctx, 6, op_size, value); break;
 		case OP_rDI: WriteGPR(ctx, 7, op_size, value); break;
-			// --- ¶Î¼Ä´æÆ÷ (Sw) ---
+			// --- æ®µå¯„å­˜å™¨ (Sw) ---
 		case Sw:
 			if (d_ctx->reg < 6) ctx->seg[d_ctx->reg] = (uint16_t)value;
 			break;
 
-			// --- Ó²±àÂë¶Î¼Ä´æÆ÷ ---
-			// ×¢Òâ£ºCS Í¨³£²»ÄÜÖ±½Ó MOV ĞŞ¸Ä£¬µ« PUSH/POP ¿ÉÄÜÉæ¼°µ½£¬Ä£ÄâÆ÷ÎªÁË¼òµ¥ÏÈÔÊĞíĞ´
+			// --- ç¡¬ç¼–ç æ®µå¯„å­˜å™¨ ---
+			// æ³¨æ„ï¼šCS é€šå¸¸ä¸èƒ½ç›´æ¥ MOV ä¿®æ”¹ï¼Œä½† PUSH/POP å¯èƒ½æ¶‰åŠåˆ°ï¼Œæ¨¡æ‹Ÿå™¨ä¸ºäº†ç®€å•å…ˆå…è®¸å†™
 		case OP_ES: ctx->ES = (uint16_t)value; break;
-		case OP_CS: ctx->CS = (uint16_t)value; break; // ¾¯¸æ£ºÕæÊµCPU¸ÄCSÍ¨³£ĞèÒªJMP FAR
+		case OP_CS: ctx->CS = (uint16_t)value; break; // è­¦å‘Šï¼šçœŸå®CPUæ”¹CSé€šå¸¸éœ€è¦JMP FAR
 		case OP_SS: ctx->SS = (uint16_t)value; break;
 		case OP_DS: ctx->DS = (uint16_t)value; break;
 		case OP_FS: ctx->FS = (uint16_t)value; break;
@@ -621,11 +651,11 @@ static void SetOperandValue(CPU_Context* ctx, DecodeContext* d_ctx, int op_idx, 
 	}
 }
 
-// ´¦Àí MOV r, i (0xB0 - 0xBF)
+// å¤„ç† MOV r, i (0xB0 - 0xBF)
 static void Exec_MOV_Generic(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. ¶ÁÈ¡Ô´²Ù×÷Êı (OP2: Immediate)
+	// 1. è¯»å–æºæ“ä½œæ•° (OP2: Immediate)
 	uint32_t src = GetOperandValue(ctx, d_ctx, 1);
-	// 2. Ğ´ÈëÄ¿µÄ²Ù×÷Êı (OP1: Register)
+	// 2. å†™å…¥ç›®çš„æ“ä½œæ•° (OP1: Register)
 	SetOperandValue(ctx, d_ctx, 0, src);
 }
 
@@ -638,107 +668,107 @@ static int CalcPF(uint8_t res) {
 }
 
 static void UpdateEFLAGS(CPU_Context* ctx, uint32_t res, uint32_t dest, uint32_t src, int size, ALU_Op op) {
-	// 1. ÌáÈ¡×î¸ßÎ» (Sign Bit) ÑÚÂë
+	// 1. æå–æœ€é«˜ä½ (Sign Bit) æ©ç 
 	uint32_t sign_mask = (size == 8) ? 0x80 : (size == 16) ? 0x8000 : 0x80000000;
-	// ½Ø¶Ï½á¹ûÒÔ·ûºÏ²Ù×÷Êı´óĞ¡
+	// æˆªæ–­ç»“æœä»¥ç¬¦åˆæ“ä½œæ•°å¤§å°
 	uint32_t truncated_res = res;
 	if (size == 8) truncated_res &= 0xFF;
 	else if (size == 16) truncated_res &= 0xFFFF;
-	// 2. Í¨ÓÃ±êÖ¾Î»¸üĞÂ
-	// ZF (Zero Flag): ½á¹ûÎª0
+	// 2. é€šç”¨æ ‡å¿—ä½æ›´æ–°
+	// ZF (Zero Flag): ç»“æœä¸º0
 	ctx->EFLAGS.ZF = (truncated_res == 0) ? 1 : 0;
-	// SF (Sign Flag): ½á¹û·ûºÅÎ»,×î¸ßÎ»Îª1
+	// SF (Sign Flag): ç»“æœç¬¦å·ä½,æœ€é«˜ä½ä¸º1
 	ctx->EFLAGS.SF = (truncated_res & sign_mask) ? 1 : 0;
-	// PF (Parity Flag): µÍ8Î»Å¼Ğ£Ñé
+	// PF (Parity Flag): ä½8ä½å¶æ ¡éªŒ
 	ctx->EFLAGS.PF = CalcPF((uint8_t)truncated_res);
-	// --- ËãÊõÌØ¶¨±êÖ¾Î» (CF, OF, AF) ---
-	// Âß¼­ÔËËã (AND/OR/XOR) Çå³ı CF/OF
+	// --- ç®—æœ¯ç‰¹å®šæ ‡å¿—ä½ (CF, OF, AF) ---
+	// é€»è¾‘è¿ç®— (AND/OR/XOR) æ¸…é™¤ CF/OF
 	if (op == ALU_AND || op == ALU_OR || op == ALU_XOR) {
 		ctx->EFLAGS.CF =0;
 		ctx->EFLAGS.OF = 0;
-		ctx->EFLAGS.AF = 0; // Î´¶¨Òå£¬Í¨³£ÇåÁã
+		ctx->EFLAGS.AF = 0; // æœªå®šä¹‰ï¼Œé€šå¸¸æ¸…é›¶
 	}
 	else if(op == ALU_ADD){
 		// ADD: res = dest + src
-		// CF (Carry): ÎŞ·ûºÅÒç³ö (½á¹ûĞ¡ÓÚÈÎÒ»²Ù×÷Êı)
-		// ×¢Òâ£ºĞè±È½Ï½Ø¶ÏÇ°µÄ res »òÕßÅĞ¶Ï½Ø¶ÏºóµÄ»ØÈÆ
+		// CF (Carry): æ— ç¬¦å·æº¢å‡º (ç»“æœå°äºä»»ä¸€æ“ä½œæ•°)
+		// æ³¨æ„ï¼šéœ€æ¯”è¾ƒæˆªæ–­å‰çš„ res æˆ–è€…åˆ¤æ–­æˆªæ–­åçš„å›ç»•
 		if (size == 32) ctx->EFLAGS.CF = (res < dest);
-		else ctx->EFLAGS.CF = ((res & (sign_mask << 1)) != 0); // ¼ì²é¸ü¸ßÒ»Î»½øÎ»//bug:ĞŞ¸´ÁË!= Óë &ÓÅÏÈ¼¶µÄÎÊÌâ
-		// OF (Overflow): ÓĞ·ûºÅÒç³ö (Õı+Õı=¸º »ò ¸º+¸º=Õı)
-		// ¹«Ê½£º(dest ^ res) & (src ^ res) & sign_mask
+		else ctx->EFLAGS.CF = ((res & (sign_mask << 1)) != 0); // æ£€æŸ¥æ›´é«˜ä¸€ä½è¿›ä½//bug:ä¿®å¤äº†!= ä¸ &ä¼˜å…ˆçº§çš„é—®é¢˜
+		// OF (Overflow): æœ‰ç¬¦å·æº¢å‡º (æ­£+æ­£=è´Ÿ æˆ– è´Ÿ+è´Ÿ=æ­£)
+		// å…¬å¼ï¼š(dest ^ res) & (src ^ res) & sign_mask
 		ctx->EFLAGS.OF = ((dest ^ truncated_res) & (src ^ truncated_res) & sign_mask)!= 0;
-		// AF (Adjust): Bit 3 ½èÎ»
-		//¼ÓÊı£¬±»¼ÓÊı£¬½á¹ûÒì»òµÈÓÚ¸ÃÎ»½øÎ»ÖÆµÄÊıÑ§Ô­Àí
+		// AF (Adjust): Bit 3 å€Ÿä½
+		//åŠ æ•°ï¼Œè¢«åŠ æ•°ï¼Œç»“æœå¼‚æˆ–ç­‰äºè¯¥ä½è¿›ä½åˆ¶çš„æ•°å­¦åŸç†
 		ctx->EFLAGS.AF = (dest ^ src ^ truncated_res) & 0x10 != 0;	
 	}
 	else if (op == ALU_SUB) {
 
-		// SUB: res = dest - src (CMP Ò²ÊÇÕâÀà)
-		// CF (Borrow): ÎŞ·ûºÅ½èÎ» (dest < src)
+		// SUB: res = dest - src (CMP ä¹Ÿæ˜¯è¿™ç±»)
+		// CF (Borrow): æ— ç¬¦å·å€Ÿä½ (dest < src)
 		ctx->EFLAGS.CF = (dest < src);
-		// OF (Overflow): Õı-¸º=¸º »ò ¸º-Õı=Õı
-		// ¹«Ê½£º(dest ^ src) & (dest ^ res) & sign_mask
+		// OF (Overflow): æ­£-è´Ÿ=è´Ÿ æˆ– è´Ÿ-æ­£=æ­£
+		// å…¬å¼ï¼š(dest ^ src) & (dest ^ res) & sign_mask
 		ctx->EFLAGS.OF = ((dest ^ src) & (dest ^ res) & sign_mask) != 0;
-		// AF (Adjust): Bit 3 ½èÎ»
+		// AF (Adjust): Bit 3 å€Ÿä½
 		ctx->EFLAGS.AF = ((dest ^ res ^ truncated_res) & 0x10) != 0;
 	}
 	else if(op == ALU_INC){
-		// INC ²»¸üĞÂ CF
+		// INC ä¸æ›´æ–° CF
 		ctx->EFLAGS.OF = ((dest ^ truncated_res) & (src ^ truncated_res) & sign_mask) != 0;
 		ctx->EFLAGS.AF = (dest ^ src ^ truncated_res) & 0x10 != 0;
 	}else if(op == ALU_DEC){
-		// DEC ²»¸üĞÂ CF
+		// DEC ä¸æ›´æ–° CF
 		ctx->EFLAGS.OF = ((dest ^ src) & (dest ^ res) & sign_mask) != 0;
 		ctx->EFLAGS.AF = ((dest ^ res ^ truncated_res) & 0x10) != 0;
 	}
 
 }
 
-// ¸¨Öúº¯Êı£º»ñÈ¡²Ù×÷ÊıµÄÊµ¼ÊÎ»¿í (8, 16, 32)
-// ÓÃÓÚÈ·±£ ALU ±êÖ¾Î»¼ÆËãÕıÈ·
+// è¾…åŠ©å‡½æ•°ï¼šè·å–æ“ä½œæ•°çš„å®é™…ä½å®½ (8, 16, 32)
+// ç”¨äºç¡®ä¿ ALU æ ‡å¿—ä½è®¡ç®—æ­£ç¡®
 static int GetOperandBitSize(CPU_Context* ctx, DecodeContext* d_ctx, OperandType type) {
-	// 1. »ñÈ¡Ç°×º¾ö¶¨µÄÄ¬ÈÏ´óĞ¡ (16 or 32)
+	// 1. è·å–å‰ç¼€å†³å®šçš„é»˜è®¤å¤§å° (16 or 32)
 	int def_op_size = (d_ctx->pfx_op_size == 0x66) ? 16 : 32;
 
 	switch (type) {
-		// --- 8 Î»²Ù×÷Êı ---
+		// --- 8 ä½æ“ä½œæ•° ---
 		case Eb: case Gb:
 		case OP_AL: case OP_CL: case OP_DL: case OP_BL:
 		case OP_AH: case OP_CH: case OP_DH: case OP_BH:
 			return 8;
 
-			// --- 16 Î»²Ù×÷Êı ---
+			// --- 16 ä½æ“ä½œæ•° ---
 		case Ew: case Gw:
-		case OP_DX: // ÓÃÓÚ IN/OUT
+		case OP_DX: // ç”¨äº IN/OUT
 		return 16;
 
-			// --- ÒÀÀµÇ°×ºµÄ²Ù×÷Êı (16/32) ---
+			// --- ä¾èµ–å‰ç¼€çš„æ“ä½œæ•° (16/32) ---
 		case Ev: case Gv: case Gz:
 		case OP_rAX: case OP_rCX: case OP_rDX: case OP_rBX:
 		case OP_rSP: case OP_rBP: case OP_rSI: case OP_rDI:
 			return def_op_size;
 
-			// --- Á¢¼´ÊıÍ¨³£¸úËæÄ¿µÄ²Ù×÷Êı´óĞ¡£¬ÕâÀï×÷Îª fallback ---
+			// --- ç«‹å³æ•°é€šå¸¸è·Ÿéšç›®çš„æ“ä½œæ•°å¤§å°ï¼Œè¿™é‡Œä½œä¸º fallback ---
 		case Ib: return 8;
 		case Iw: return 16;
 		case Iv: case Iz: return def_op_size;
 
 		default:
-			return def_op_size; // Ä¬ÈÏ
+			return def_op_size; // é»˜è®¤
 	}
 }
 
 static void Exec_ALU_Generic(CPU_Context* ctx, DecodeContext* d_ctx, ALU_Op op, bool is_compare) {
-	// 1. È·¶¨ÔËËãÎ»¿í (·Ç³£¹Ø¼ü£¡)
-	// ÎÒÃÇ¸ù¾İ Op1 (Ä¿µÄ²Ù×÷Êı) µÄÀàĞÍÀ´¾ö¶¨ÔËËãÊÇ 8Î» »¹ÊÇ 32Î»
-	// Ö®Ç°Â©µôÁË OP_AL µÈÀàĞÍ£¬ÏÖÔÚÓÃ GetOperandBitSize ĞŞ¸´
+	// 1. ç¡®å®šè¿ç®—ä½å®½ (éå¸¸å…³é”®ï¼)
+	// æˆ‘ä»¬æ ¹æ® Op1 (ç›®çš„æ“ä½œæ•°) çš„ç±»å‹æ¥å†³å®šè¿ç®—æ˜¯ 8ä½ è¿˜æ˜¯ 32ä½
+	// ä¹‹å‰æ¼æ‰äº† OP_AL ç­‰ç±»å‹ï¼Œç°åœ¨ç”¨ GetOperandBitSize ä¿®å¤
 	int size_d = GetOperandBitSize(ctx, d_ctx, d_ctx->entry.op1);
 	int size_s = GetOperandBitSize(ctx, d_ctx, d_ctx->entry.op2);
-	// 2. »ñÈ¡²Ù×÷Êı
+	// 2. è·å–æ“ä½œæ•°
 	uint32_t dest = GetOperandValue(ctx, d_ctx, 0); // Op1 (Dest)
 	uint32_t src = GetOperandValue(ctx, d_ctx, 1); // Op2 (Src)
-	// ¶ÔÓÚ 8 Î»ºÍ 16 Î»ÔËËã£¬±ØĞë¶Ô¶ÁÈ¡µ½µÄÖµ½øĞĞ½Ø¶ÏÇåÀí£¬
-	// ·ÀÖ¹¸ßÎ»À¬»øÊı¾İ¸ÉÈÅ±êÖ¾Î»¼ÆËã (ÌØ±ğÊÇÁ¢¼´Êı·ûºÅÀ©Õ¹ºóµÄ¸ßÎ»)
+	// å¯¹äº 8 ä½å’Œ 16 ä½è¿ç®—ï¼Œå¿…é¡»å¯¹è¯»å–åˆ°çš„å€¼è¿›è¡Œæˆªæ–­æ¸…ç†ï¼Œ
+	// é˜²æ­¢é«˜ä½åƒåœ¾æ•°æ®å¹²æ‰°æ ‡å¿—ä½è®¡ç®— (ç‰¹åˆ«æ˜¯ç«‹å³æ•°ç¬¦å·æ‰©å±•åçš„é«˜ä½)
 
 	uint32_t mask_d = (size_d == 8) ? 0xFF : (size_d == 16 ? 0xFFFF : 0xFFFFFFFF);
 	uint32_t mask_s = (size_s == 8) ? 0xFF : (size_s == 16 ? 0xFFFF : 0xFFFFFFFF);
@@ -746,8 +776,8 @@ static void Exec_ALU_Generic(CPU_Context* ctx, DecodeContext* d_ctx, ALU_Op op, 
 	src &= mask_s;
 	uint32_t res = 0;
 
-	uint32_t cf_in = ctx->EFLAGS.CF; // »ñÈ¡µ±Ç°µÄ½øÎ»
-	// 3. Ö´ĞĞ¼ÆËã
+	uint32_t cf_in = ctx->EFLAGS.CF; // è·å–å½“å‰çš„è¿›ä½
+	// 3. æ‰§è¡Œè®¡ç®—
 	switch (op) {
 		case ALU_ADD: res = dest + src; break;
 		case ALU_OR : res = dest | src; break;
@@ -759,19 +789,19 @@ static void Exec_ALU_Generic(CPU_Context* ctx, DecodeContext* d_ctx, ALU_Op op, 
 		case ALU_INC: res = dest + 1; break;
 		case ALU_DEC: res = dest - 1; break;
 	}
-	// 3.1.ÔÚ¸üĞÂ±êÖ¾Î»Ç°£¬ÏÈÄÃµ½½Ø¶ÏºóµÄ½á¹û
+	// 3.1.åœ¨æ›´æ–°æ ‡å¿—ä½å‰ï¼Œå…ˆæ‹¿åˆ°æˆªæ–­åçš„ç»“æœ
 	uint32_t truncated_res = res & mask_d;
-	// 4. ¸üĞÂ±êÖ¾Î» (´«ÈëÕıÈ·µÄ size)
+	// 4. æ›´æ–°æ ‡å¿—ä½ (ä¼ å…¥æ­£ç¡®çš„ size)
 	UpdateEFLAGS(ctx, truncated_res, dest, src, size_d, op);
-	// 5. Ğ´»Ø½á¹û (Èç¹ûÊÇ CMP/TEST ÔòÌø¹ı)
+	// 5. å†™å›ç»“æœ (å¦‚æœæ˜¯ CMP/TEST åˆ™è·³è¿‡)
 	if (!is_compare) {
 		SetOperandValue(ctx, d_ctx, 0, truncated_res);
 	}
 }
 
-// ´¦Àí Group 1 Ö¸Áî (0x80-0x83: ADD/OR/ADC/SBB/AND/SUB/XOR/CMP immediate)
+// å¤„ç† Group 1 æŒ‡ä»¤ (0x80-0x83: ADD/OR/ADC/SBB/AND/SUB/XOR/CMP immediate)
 static void Exec_Group1(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// Group 1 µÄÖ¸ÁîÓÉ modrm.reg ×Ö¶Î¾ö¶¨²Ù×÷ÀàĞÍ
+	// Group 1 çš„æŒ‡ä»¤ç”± modrm.reg å­—æ®µå†³å®šæ“ä½œç±»å‹
 	switch (d_ctx->reg) {
 		case 0: Exec_ALU_Generic(ctx, d_ctx, ALU_ADD, false); break;
 		case 1: Exec_ALU_Generic(ctx, d_ctx, ALU_OR, false); break;
@@ -786,16 +816,16 @@ static void Exec_Group1(CPU_Context* ctx, DecodeContext* d_ctx) {
 
 // PUSH r32 / imm32 / imm8
 static void Exec_PUSH(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. ¶ÁÈ¡ÒªÑ¹ÈëµÄÖµ (Op1)
-	// ×¢Òâ´¦Àí PUSH ESP µÄÌØÊâÇé¿ö£ºIntel ¹æ¶¨Ñ¹ÈëµÄÊÇÖ´ĞĞÖ¸ÁîÇ°µÄ ESP Öµ
-	// ÎÒÃÇµÄ GetOperandValue »á¶ÁÈ¡µ±Ç°µÄ ESP£¬ÕâÃ»ÎÊÌâ¡£
+	// 1. è¯»å–è¦å‹å…¥çš„å€¼ (Op1)
+	// æ³¨æ„å¤„ç† PUSH ESP çš„ç‰¹æ®Šæƒ…å†µï¼šIntel è§„å®šå‹å…¥çš„æ˜¯æ‰§è¡ŒæŒ‡ä»¤å‰çš„ ESP å€¼
+	// æˆ‘ä»¬çš„ GetOperandValue ä¼šè¯»å–å½“å‰çš„ ESPï¼Œè¿™æ²¡é—®é¢˜ã€‚
 	uint32_t value = GetOperandValue(ctx, d_ctx, 0);
-	// »ñÈ¡²Ù×÷Êı´óĞ¡ (Í¨³£ÊÇ 32Î»£¬¼´ 4×Ö½Ú)
+	// è·å–æ“ä½œæ•°å¤§å° (é€šå¸¸æ˜¯ 32ä½ï¼Œå³ 4å­—èŠ‚)
 	int size = (d_ctx->pfx_op_size == 0x66) ? 2 : 4;
-	// 2. µ÷Õû ESP (ÏòÏÂÔö³¤)
+	// 2. è°ƒæ•´ ESP (å‘ä¸‹å¢é•¿)
 	ctx->ESP.I32 -= size;
-	// 3. Ğ´ÈëÄÚ´æ
-	// Host-Passthrough: Ö±½ÓĞ´Èë ctx->ESP Ö¸ÏòµÄµØÖ·
+	// 3. å†™å…¥å†…å­˜
+	// Host-Passthrough: ç›´æ¥å†™å…¥ ctx->ESP æŒ‡å‘çš„åœ°å€
 	if (size == 4) {
 		*(uint32_t*)ctx->ESP.I32 = value;
 	}
@@ -806,7 +836,7 @@ static void Exec_PUSH(CPU_Context* ctx, DecodeContext* d_ctx) {
 // POP r32
 static void Exec_POP(CPU_Context* ctx, DecodeContext* d_ctx) {
 	int size = (d_ctx->pfx_op_size == 0x66) ? 2 : 4;
-	// 1. ´ÓÕ»¶¥¶ÁÈ¡Êı¾İ
+	// 1. ä»æ ˆé¡¶è¯»å–æ•°æ®
 	uint32_t val = 0;
 	if (size == 4) {
 		val = *(uint32_t*)ctx->ESP.I32;
@@ -814,11 +844,11 @@ static void Exec_POP(CPU_Context* ctx, DecodeContext* d_ctx) {
 	else {
 		val = *(uint16_t*)ctx->ESP.I32;
 	}
-	// 2. µ÷Õû ESP (ÏòÉÏÊÕËõ)
-	// ×¢Òâ POP ESP µÄÌØÊâÇé¿ö£ºËü»áÏÈ¶ÁÕ»¶¥Êı¾İ£¬È»ºó ESP+4£¬×îºó°Ñ¶Á³öµÄÊı¾İ¸²¸Ç»Ø ESP¡£
-	// ½á¹û¾ÍÊÇ ESP µÈÓÚÕ»¶¥Ô­À´µÄÄÇ¸öÖµ£¨ESP+4 ±»¸²¸ÇÁË£©¡£
+	// 2. è°ƒæ•´ ESP (å‘ä¸Šæ”¶ç¼©)
+	// æ³¨æ„ POP ESP çš„ç‰¹æ®Šæƒ…å†µï¼šå®ƒä¼šå…ˆè¯»æ ˆé¡¶æ•°æ®ï¼Œç„¶å ESP+4ï¼Œæœ€åæŠŠè¯»å‡ºçš„æ•°æ®è¦†ç›–å› ESPã€‚
+	// ç»“æœå°±æ˜¯ ESP ç­‰äºæ ˆé¡¶åŸæ¥çš„é‚£ä¸ªå€¼ï¼ˆESP+4 è¢«è¦†ç›–äº†ï¼‰ã€‚
 	ctx->ESP.I32 += size;
-	// 3. Ğ´ÈëÄ¿µÄ²Ù×÷Êı (Op1)
+	// 3. å†™å…¥ç›®çš„æ“ä½œæ•° (Op1)
 	SetOperandValue(ctx, d_ctx, 0, val);
 }
 
@@ -847,7 +877,7 @@ static void Exec_POPA(CPU_Context* ctx, DecodeContext* d_ctx) {
 		ctx->EDI.I16 = (uint16_t)MemRead(ctx->ESP.I32, 2); ctx->ESP.I32 += 2;
 		ctx->ESI.I16 = (uint16_t)MemRead(ctx->ESP.I32, 2); ctx->ESP.I32 += 2;
 		ctx->EBP.I16 = (uint16_t)MemRead(ctx->ESP.I32, 2); ctx->ESP.I32 += 2;
-		ctx->ESP.I32 += 2; // ¶ªÆú SP
+		ctx->ESP.I32 += 2; // ä¸¢å¼ƒ SP
 		ctx->EBX.I16 = (uint16_t)MemRead(ctx->ESP.I32, 2); ctx->ESP.I32 += 2;
 		ctx->EDX.I16 = (uint16_t)MemRead(ctx->ESP.I32, 2); ctx->ESP.I32 += 2;
 		ctx->ECX.I16 = (uint16_t)MemRead(ctx->ESP.I32, 2); ctx->ESP.I32 += 2;
@@ -857,7 +887,7 @@ static void Exec_POPA(CPU_Context* ctx, DecodeContext* d_ctx) {
 		ctx->EDI.I32 = MemRead(ctx->ESP.I32, 4); ctx->ESP.I32 += 4;
 		ctx->ESI.I32 = MemRead(ctx->ESP.I32, 4); ctx->ESP.I32 += 4;
 		ctx->EBP.I32 = MemRead(ctx->ESP.I32, 4); ctx->ESP.I32 += 4;
-		ctx->ESP.I32 += 4; // ¶ªÆú ESP
+		ctx->ESP.I32 += 4; // ä¸¢å¼ƒ ESP
 		ctx->EBX.I32 = MemRead(ctx->ESP.I32, 4); ctx->ESP.I32 += 4;
 		ctx->EDX.I32 = MemRead(ctx->ESP.I32, 4); ctx->ESP.I32 += 4;
 		ctx->ECX.I32 = MemRead(ctx->ESP.I32, 4); ctx->ESP.I32 += 4;
@@ -865,72 +895,72 @@ static void Exec_POPA(CPU_Context* ctx, DecodeContext* d_ctx) {
 	}
 }
 
-// ¼ì²éÌõ¼şÌø×ªÊÇ·ñ³ÉÁ¢ (Jcc)
-// condition_code: ÊäÈëÖ¸ÁîÂë£¬È¡Ö¸Áî Opcode µÄµÍ 4 Î» (0x70-0x7F »ò 0x80-0x8F µÄµÍÎ»)£¬»¹¿ÉÒÔ´¦ÀíÀàËÆµÄÂß¼­£¬±ÈÈçCMOV,SETccµÈ
+// æ£€æŸ¥æ¡ä»¶è·³è½¬æ˜¯å¦æˆç«‹ (Jcc)
+// condition_code: è¾“å…¥æŒ‡ä»¤ç ï¼Œå–æŒ‡ä»¤ Opcode çš„ä½ 4 ä½ (0x70-0x7F æˆ– 0x80-0x8F çš„ä½ä½)ï¼Œè¿˜å¯ä»¥å¤„ç†ç±»ä¼¼çš„é€»è¾‘ï¼Œæ¯”å¦‚CMOV,SETccç­‰
 static bool CheckCondition(CPU_Context* ctx, uint8_t condition_code) {
 	switch (condition_code & 0xF) {
 		case 0x0: return ctx->EFLAGS.OF == 1;          // JO
 		case 0x1: return ctx->EFLAGS.OF == 0;          // JNO
-		case 0x2: return ctx->EFLAGS.CF == 1;          // JB, JNAE (ÎŞ·ûºÅ <)
-		case 0x3: return ctx->EFLAGS.CF == 0;          // JNB, JAE (ÎŞ·ûºÅ >=)
-		case 0x4: return ctx->EFLAGS.ZF == 1;          // JZ, JE (µÈÓÚ)
-		case 0x5: return ctx->EFLAGS.ZF == 0;          // JNZ, JNE (²»µÈÓÚ)
-		case 0x6: return (ctx->EFLAGS.CF | ctx->EFLAGS.ZF) == 1; // JBE, JNA (ÎŞ·ûºÅ <=)
-		case 0x7: return (ctx->EFLAGS.CF | ctx->EFLAGS.ZF) == 0; // JA, JNBE (ÎŞ·ûºÅ >)
+		case 0x2: return ctx->EFLAGS.CF == 1;          // JB, JNAE (æ— ç¬¦å· <)
+		case 0x3: return ctx->EFLAGS.CF == 0;          // JNB, JAE (æ— ç¬¦å· >=)
+		case 0x4: return ctx->EFLAGS.ZF == 1;          // JZ, JE (ç­‰äº)
+		case 0x5: return ctx->EFLAGS.ZF == 0;          // JNZ, JNE (ä¸ç­‰äº)
+		case 0x6: return (ctx->EFLAGS.CF | ctx->EFLAGS.ZF) == 1; // JBE, JNA (æ— ç¬¦å· <=)
+		case 0x7: return (ctx->EFLAGS.CF | ctx->EFLAGS.ZF) == 0; // JA, JNBE (æ— ç¬¦å· >)
 		case 0x8: return ctx->EFLAGS.SF == 1;          // JS
 		case 0x9: return ctx->EFLAGS.SF == 0;          // JNS
 		case 0xA: return ctx->EFLAGS.PF == 1;          // JP, JPE
 		case 0xB: return ctx->EFLAGS.PF == 0;          // JNP, JPO
-		case 0xC: return ctx->EFLAGS.SF != ctx->EFLAGS.OF;       // JL, JNGE (ÓĞ·ûºÅ <)
-		case 0xD: return ctx->EFLAGS.SF == ctx->EFLAGS.OF;       // JNL, JGE (ÓĞ·ûºÅ >=)
-		case 0xE: return ctx->EFLAGS.ZF == 1 || (ctx->EFLAGS.SF != ctx->EFLAGS.OF); // JLE, JNG (ÓĞ·ûºÅ <=)
-		case 0xF: return ctx->EFLAGS.ZF == 0 && (ctx->EFLAGS.SF == ctx->EFLAGS.OF); // JG, JNLE (ÓĞ·ûºÅ >)
+		case 0xC: return ctx->EFLAGS.SF != ctx->EFLAGS.OF;       // JL, JNGE (æœ‰ç¬¦å· <)
+		case 0xD: return ctx->EFLAGS.SF == ctx->EFLAGS.OF;       // JNL, JGE (æœ‰ç¬¦å· >=)
+		case 0xE: return ctx->EFLAGS.ZF == 1 || (ctx->EFLAGS.SF != ctx->EFLAGS.OF); // JLE, JNG (æœ‰ç¬¦å· <=)
+		case 0xF: return ctx->EFLAGS.ZF == 0 && (ctx->EFLAGS.SF == ctx->EFLAGS.OF); // JG, JNLE (æœ‰ç¬¦å· >)
 	}
-	return false; // Ä¬ÈÏ²»Ìø×ª
+	return false; // é»˜è®¤ä¸è·³è½¬
 }
-// ´¦ÀíÏà¶ÔÌø×ª (JMP, Jcc)
-// ·µ»Ø true ±íÊ¾Ìø×ª·¢Éú
+// å¤„ç†ç›¸å¯¹è·³è½¬ (JMP, Jcc)
+// è¿”å› true è¡¨ç¤ºè·³è½¬å‘ç”Ÿ
 static bool Exec_Branch(CPU_Context* ctx, DecodeContext* d_ctx, bool is_conditional) {
 	bool take_jump = true;
 	if (is_conditional) {
-		// Èç¹ûÊÇÌõ¼şÌø×ª£¬ÏÈ¼ì²éÌõ¼ş
+		// å¦‚æœæ˜¯æ¡ä»¶è·³è½¬ï¼Œå…ˆæ£€æŸ¥æ¡ä»¶
 		take_jump = CheckCondition(ctx, d_ctx->opcode);
 	}
 	if (take_jump) {
-		// ¼ÆËãÄ¿±êµØÖ·
-		// x86 Ïà¶ÔÌø×ª¹«Ê½£ºTarget = Current_EIP + Instruction_Length + Relative_Offset
-		// d_ctx->imm ´æ´¢µÄÊÇÏà¶ÔÆ«ÒÆ (Relative Offset)
+		// è®¡ç®—ç›®æ ‡åœ°å€
+		// x86 ç›¸å¯¹è·³è½¬å…¬å¼ï¼šTarget = Current_EIP + Instruction_Length + Relative_Offset
+		// d_ctx->imm å­˜å‚¨çš„æ˜¯ç›¸å¯¹åç§» (Relative Offset)
 		uint32_t offset = (uint32_t)d_ctx->imm;
 		ctx->EIP += d_ctx->instr_len + offset; 
 		return true; 
 	}
-	return false; // Î´Ìø×ª
+	return false; // æœªè·³è½¬
 }
 
-// ´¦Àí CALL (Ïà¶Ôµ÷ÓÃ)
+// å¤„ç† CALL (ç›¸å¯¹è°ƒç”¨)
 static bool Exec_CALL(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. ¼ÆËã·µ»ØµØÖ· (ÏÂÒ»ÌõÖ¸Áî)
+	// 1. è®¡ç®—è¿”å›åœ°å€ (ä¸‹ä¸€æ¡æŒ‡ä»¤)
 	uint32_t ret_addr = ctx->EIP + d_ctx->instr_len;
-	// 2. Ñ¹Èë·µ»ØµØÖ· (Ïàµ±ÓÚ PUSH ret_addr)
+	// 2. å‹å…¥è¿”å›åœ°å€ (ç›¸å½“äº PUSH ret_addr)
 	ctx->ESP.I32 -= 4;
 	*(uint32_t*)ctx->ESP.I32 = ret_addr;
 	
-	// 3. Ö´ĞĞÌø×ª
+	// 3. æ‰§è¡Œè·³è½¬
 	uint32_t offset = (uint32_t)d_ctx->imm;
 	ctx->EIP += d_ctx->instr_len + offset;
 	return true;
 }
 
-// ´¦Àí RET (·µ»Ø)
+// å¤„ç† RET (è¿”å›)
 static bool Exec_RET(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. µ¯³ö·µ»ØµØÖ· (Ïàµ±ÓÚ POP EIP)
+	// 1. å¼¹å‡ºè¿”å›åœ°å€ (ç›¸å½“äº POP EIP)
 	uint32_t ret_addr = *(uint32_t*)ctx->ESP.I32;
 	ctx->ESP.I32 += 4;
-	// 2. ´¦Àí RET n (´øÁ¢¼´ÊıµÄ·µ»Ø£¬ÓÃÓÚÆ½Õ»)
-	if(d_ctx->opcode == 0xC2 || d_ctx->opcode == 0xCA) { //ÒÔºóCA´¦Àí¶Î¼Ä´æÆ÷Ê±ÔÙÊµÏÖ
+	// 2. å¤„ç† RET n (å¸¦ç«‹å³æ•°çš„è¿”å›ï¼Œç”¨äºå¹³æ ˆ)
+	if(d_ctx->opcode == 0xC2 || d_ctx->opcode == 0xCA) { //ä»¥åCAå¤„ç†æ®µå¯„å­˜å™¨æ—¶å†å®ç°
 		ctx->ESP.I32 += d_ctx->imm;
 	}
-	// 3. ÉèÖÃ EIP
+	// 3. è®¾ç½® EIP
 	ctx->EIP = ret_addr;
 	return true;
 }
@@ -951,7 +981,7 @@ uint32_t val = ReadGPR(ctx,reg,32);
 	WriteGPR(ctx, reg, 32, res);
 }
 
-// ¸¨Öú£º½ö¸üĞÂÂß¼­±êÖ¾Î» (ZF, SF, PF)
+// è¾…åŠ©ï¼šä»…æ›´æ–°é€»è¾‘æ ‡å¿—ä½ (ZF, SF, PF)
 static void UpdateLogicFlags(CPU_Context* ctx, uint32_t res, int size) {
 	uint32_t truncated_res = res;
 	uint32_t sign_mask = 0;
@@ -964,40 +994,40 @@ static void UpdateLogicFlags(CPU_Context* ctx, uint32_t res, int size) {
 	ctx->EFLAGS.SF = (truncated_res & sign_mask) ? 1 : 0;
 	ctx->EFLAGS.PF = CalcPF(truncated_res);
 }
-//´¦ÀíGroup2Ö¸Áî£ºSHL, SHR, SAR(ÒÆÎ») ºÍ ROL, ROR, RCL, RCR(Ñ­»·ÒÆÎ»)¡£
+//å¤„ç†Group2æŒ‡ä»¤ï¼šSHL, SHR, SAR(ç§»ä½) å’Œ ROL, ROR, RCL, RCR(å¾ªç¯ç§»ä½)ã€‚
 static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. È·¶¨Î»¿í
+	// 1. ç¡®å®šä½å®½
 	int size = GetOperandBitSize(ctx, d_ctx, d_ctx->entry.op1);
 	uint32_t val = GetOperandValue(ctx, d_ctx, 0);// Dest
 
-	// ÑÚÂëÓÃÓÚ½Ø¶Ï¸ßÎ»À¬»ø
+	// æ©ç ç”¨äºæˆªæ–­é«˜ä½åƒåœ¾
 	uint32_t mask = (size == 32) ? 0xFFFFFFFF : ((1 << size) - 1);
 	val &= mask;
-	// MSB ÑÚÂë (×î¸ßÎ»)
+	// MSB æ©ç  (æœ€é«˜ä½)
 	uint32_t msb_mask = 1 << (size - 1);
-	// 2. È·¶¨ÒÆÎ»´ÎÊı (Count)
-	// D0/D1/C0/C1 µÈ Opcode ÒÑ¾­ÔÚ disasm ½×¶Î°ÑÁ¢¼´Êı½âÎöµ½ÁË imm£¬»òÕß CL ½âÎöµ½ÁË op2
-	// µ« Group 2 ±È½ÏÌØÊâ£¬ÎÒÃÇĞèÒªÊÖ¶¯ÅĞ¶ÏÒ»ÏÂÀ´Ô´
+	// 2. ç¡®å®šç§»ä½æ¬¡æ•° (Count)
+	// D0/D1/C0/C1 ç­‰ Opcode å·²ç»åœ¨ disasm é˜¶æ®µæŠŠç«‹å³æ•°è§£æåˆ°äº† immï¼Œæˆ–è€… CL è§£æåˆ°äº† op2
+	// ä½† Group 2 æ¯”è¾ƒç‰¹æ®Šï¼Œæˆ‘ä»¬éœ€è¦æ‰‹åŠ¨åˆ¤æ–­ä¸€ä¸‹æ¥æº
 	uint32_t count = 0;
 	if (d_ctx->opcode == 0xC0 || d_ctx->opcode == 0xC1){count = (uint32_t)d_ctx->imm;}
-	else if (d_ctx->opcode == 0xD0 || d_ctx->opcode == 0xD1) {count = 1;}// D0/D1 ¹Ì¶¨Îª 1
+	else if (d_ctx->opcode == 0xD0 || d_ctx->opcode == 0xD1) {count = 1;}// D0/D1 å›ºå®šä¸º 1
 	else if (d_ctx->opcode == 0xD2 || d_ctx->opcode == 0xD3) {count = ReadGPR(ctx, 1, 8); }// CL
-	// Intel ÊÖ²á¹æ¶¨£ºÒÆÎ»´ÎÊıÖ»È¡µÍ 5 Î» (0-31)
+	// Intel æ‰‹å†Œè§„å®šï¼šç§»ä½æ¬¡æ•°åªå–ä½ 5 ä½ (0-31)
 	count &= 0x1F;
-	if (count == 0) return; // 0 ´ÎÒÆÎ»²»Ó°Ïì±êÖ¾Î»
-	// 3. ¸ù¾İ ModRM.reg Çø·ÖÖ¸Áî²¢Ö´ĞĞ
-	// Ê¹ÓÃÑ­»·Ä£Äâ£¬Ã¿´ÎÒÆ 1 Î»£¬È·±£ CF/OF ÕıÈ·
+	if (count == 0) return; // 0 æ¬¡ç§»ä½ä¸å½±å“æ ‡å¿—ä½
+	// 3. æ ¹æ® ModRM.reg åŒºåˆ†æŒ‡ä»¤å¹¶æ‰§è¡Œ
+	// ä½¿ç”¨å¾ªç¯æ¨¡æ‹Ÿï¼Œæ¯æ¬¡ç§» 1 ä½ï¼Œç¡®ä¿ CF/OF æ­£ç¡®
 	uint32_t res = val;
-	uint32_t original_msb = val & msb_mask; // ÓÃÓÚ SAR,Ô­·û·ûºÅÎ»
-	// reg ×Ö¶Î¶¨Òå:
+	uint32_t original_msb = val & msb_mask; // ç”¨äº SAR,åŸç¬¦ç¬¦å·ä½
+	// reg å­—æ®µå®šä¹‰:
 	// 0=ROL, 1=ROR, 2=RCL, 3=RCR, 4=SHL/SAL, 5=SHR, 7=SAR
 	switch (d_ctx->reg) {
-		case 0: { // ROL (Ñ­»·×óÒÆ)
+		case 0: { // ROL (å¾ªç¯å·¦ç§»)
 			for (int i = 0; i < count; i++) {
 				uint32_t bit = (res & msb_mask) ? 1 : 0;
-				ctx->EFLAGS.CF = bit; // CF = ÒÆ³öµÄÎ»
+				ctx->EFLAGS.CF = bit; // CF = ç§»å‡ºçš„ä½
 				res <<= 1;
-				res |= bit; // ÒÆ³öµÄÎ»²¹µ½×îµÍÎ»
+				res |= bit; // ç§»å‡ºçš„ä½è¡¥åˆ°æœ€ä½ä½
 			}
 			// OF (count=1): MSB ^ CF
 			if (count == 1) {
@@ -1006,15 +1036,15 @@ static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx) {
 			break;
 		}
 
-		case 1: { // ROR (Ñ­»·ÓÒÒÆ)
+		case 1: { // ROR (å¾ªç¯å³ç§»)
 			for (int i = 0; i < count; i++) {
 				uint32_t bit = res & 1;
 				res >>= 1;
-				ctx->EFLAGS.CF = bit; // CF = ÒÆ³öµÄÎ»
-				if (bit) res |= msb_mask; // ÒÆ³öµÄÎ»²¹µ½×î¸ßÎ»
+				ctx->EFLAGS.CF = bit; // CF = ç§»å‡ºçš„ä½
+				if (bit) res |= msb_mask; // ç§»å‡ºçš„ä½è¡¥åˆ°æœ€é«˜ä½
 			}
 			if (count == 1) {
-				// ¸ù¾İ Intel ÊÖ²á£ºOF = MSB(result) ^ MSB-1(result)
+				// æ ¹æ® Intel æ‰‹å†Œï¼šOF = MSB(result) ^ MSB-1(result)
 				uint32_t msb = (res >> (size - 1)) & 1;
 				uint32_t msb_minus_1 = (res >> (size - 2)) & 1;
 				ctx->EFLAGS.OF = msb ^ msb_minus_1;
@@ -1022,15 +1052,15 @@ static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx) {
 			break;
 		}
 		
-		case 2: { // RCL (´ø½øÎ»µÄÑ­»·×óÒÆ)
+		case 2: { // RCL (å¸¦è¿›ä½çš„å¾ªç¯å·¦ç§»)
 			for (int i = 0; i < count; i++) {
 				uint32_t bit = (res & msb_mask) ? 1 : 0;
 				res <<= 1;
-				// ½« CF ²¹µ½×îµÍÎ»
+				// å°† CF è¡¥åˆ°æœ€ä½ä½
 				if (ctx->EFLAGS.CF) {
 					res |= 1;
 				}
-				ctx->EFLAGS.CF = bit; // CF = ÒÆ³öµÄÎ»
+				ctx->EFLAGS.CF = bit; // CF = ç§»å‡ºçš„ä½
 			}
 			// OF (count=1): MSB ^ CF
 			if (count == 1) {
@@ -1039,15 +1069,15 @@ static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx) {
 			break;
 		}
 
-		case 3: { // RCR (´ø½øÎ»µÄÑ­»·ÓÒÒÆ)
+		case 3: { // RCR (å¸¦è¿›ä½çš„å¾ªç¯å³ç§»)
 			for (int i = 0; i < count; i++) {
 				uint32_t bit = res & 1;
 				res >>= 1;
-				// ½« CF ²¹µ½×î¸ßÎ»
+				// å°† CF è¡¥åˆ°æœ€é«˜ä½
 				if (ctx->EFLAGS.CF) {
 					res |= msb_mask;
 				}
-				ctx->EFLAGS.CF = bit; // CF = ÒÆ³öµÄÎ»
+				ctx->EFLAGS.CF = bit; // CF = ç§»å‡ºçš„ä½
 			}
 			// OF (count=1): MSB ^ MSB-1
 			if (count == 1) {
@@ -1059,12 +1089,12 @@ static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx) {
 		}
 		
 
-		case 4:{// SHL / SAL (Âß¼­×óÒÆ)
-			for (int i = 0; i < count; i++) {// CF = ÒÆ³öµÄ×î¸ßÎ»
+		case 4:{// SHL / SAL (é€»è¾‘å·¦ç§»)
+			for (int i = 0; i < count; i++) {// CF = ç§»å‡ºçš„æœ€é«˜ä½
 				ctx->EFLAGS.CF = (res & msb_mask) ? 1 : 0;
 				res <<= 1;
 			}
-			// OF (½ö count=1 Ê±¶¨Òå): ×î¸ßÎ»ÊÇ·ñ¸Ä±ä (MSB ^ CF)
+			// OF (ä»… count=1 æ—¶å®šä¹‰): æœ€é«˜ä½æ˜¯å¦æ”¹å˜ (MSB ^ CF)
 			if (count == 1) {
 				ctx->EFLAGS.OF = ctx->EFLAGS.CF ^ ((res & msb_mask) ? 1 : 0);
 			}
@@ -1072,27 +1102,27 @@ static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx) {
 		}
 		
 		case 5: {
-			for (int i = 0; i < count; i++) {// CF = ÒÆ³öµÄ×îµÍÎ»
+			for (int i = 0; i < count; i++) {// CF = ç§»å‡ºçš„æœ€ä½ä½
 				ctx->EFLAGS.CF = res & 1;
 				res >>= 1;
 			}
-			// OF (½ö count=1 Ê±¶¨Òå): Ô­×î¸ßÎ» (SHR ×ÜÊÇ°Ñ×î¸ßÎ»Çå0£¬ËùÒÔ¿´Ô­×î¸ßÎ»ÊÇ·ñÎª1)
+			// OF (ä»… count=1 æ—¶å®šä¹‰): åŸæœ€é«˜ä½ (SHR æ€»æ˜¯æŠŠæœ€é«˜ä½æ¸…0ï¼Œæ‰€ä»¥çœ‹åŸæœ€é«˜ä½æ˜¯å¦ä¸º1)
 			if (count == 1) {
 				ctx->EFLAGS.OF = (original_msb) ? 1 : 0;
 			}
 			break;
 		}
 
-		case 7: { // SAR (ËãÊõÓÒÒÆ)
+		case 7: { // SAR (ç®—æœ¯å³ç§»)
 			for (int i = 0; i < count; i++) {
 				ctx->EFLAGS.CF = res & 1;
 				res >>= 1;
-				// ±£³Ö·ûºÅÎ»
+				// ä¿æŒç¬¦å·ä½
 				if (original_msb) {
 					res |= msb_mask;
 				}
 			}
-			// OF (½ö count=1 Ê±¶¨Òå): SAR ²»¸Ä±ä·ûºÅÎ»£¬ËùÒÔ OF ×ÜÊÇ 0
+			// OF (ä»… count=1 æ—¶å®šä¹‰): SAR ä¸æ”¹å˜ç¬¦å·ä½ï¼Œæ‰€ä»¥ OF æ€»æ˜¯ 0
 			if (count == 1) {
 				ctx->EFLAGS.OF = 0;
 			}
@@ -1104,72 +1134,72 @@ static void Exec_Group2(CPU_Context* ctx, DecodeContext* d_ctx) {
 
 	}
 
-	// 4. Ğ´»Ø½á¹û
-	// ½Ø¶Ï½á¹ûÒÔ·ÀÍò
+	// 4. å†™å›ç»“æœ
+	// æˆªæ–­ç»“æœä»¥é˜²ä¸‡
 	res &= mask;
-	// ¸üĞÂ SF, ZF, PF
+	// æ›´æ–° SF, ZF, PF
 	UpdateLogicFlags(ctx, res, size);
-	// Ğ´»Ø
+	// å†™å›
 	SetOperandValue(ctx, d_ctx, 0, res);
 }
 
-// ¸¨Öú£º»ñÈ¡ Group 3 µÄÔ´²Ù×÷Êı (Multiplier / Divisor)
-// ¸ù¾İÄãµÄ disasm ±í¶¨Òå£º
-// F6: MUL AL, Eb -> Op1=AL, Op2=Eb. ËùÒÔÔ´²Ù×÷ÊıÊÇ Op2 (index 1)
-// F6: NOT Eb     -> Op1=Eb.         ËùÒÔÔ´²Ù×÷ÊıÊÇ Op1 (index 0)
-// ÎÒÃÇĞèÒª¸ù¾İ reg ×Ö¶ÎÅĞ¶ÏÔ´ÔÚÄÄÀï
+// è¾…åŠ©ï¼šè·å– Group 3 çš„æºæ“ä½œæ•° (Multiplier / Divisor)
+// æ ¹æ®ä½ çš„ disasm è¡¨å®šä¹‰ï¼š
+// F6: MUL AL, Eb -> Op1=AL, Op2=Eb. æ‰€ä»¥æºæ“ä½œæ•°æ˜¯ Op2 (index 1)
+// F6: NOT Eb     -> Op1=Eb.         æ‰€ä»¥æºæ“ä½œæ•°æ˜¯ Op1 (index 0)
+// æˆ‘ä»¬éœ€è¦æ ¹æ® reg å­—æ®µåˆ¤æ–­æºåœ¨å“ªé‡Œ
 static uint32_t GetGroup3Source(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// reg 0(TEST), 2(NOT), 3(NEG): µ¥²Ù×÷Êı»òÁ¢¼´Êı£¬Ô´ÔÚ Op1 »ò Op2(TEST)
-	// reg 4(MUL), 5(IMUL), 6(DIV), 7(IDIV): disasm ±í¶¨ÒåÁË Op1=Acc, Op2=Src. ËùÒÔÔ´ÔÚ Op2
+	// reg 0(TEST), 2(NOT), 3(NEG): å•æ“ä½œæ•°æˆ–ç«‹å³æ•°ï¼Œæºåœ¨ Op1 æˆ– Op2(TEST)
+	// reg 4(MUL), 5(IMUL), 6(DIV), 7(IDIV): disasm è¡¨å®šä¹‰äº† Op1=Acc, Op2=Src. æ‰€ä»¥æºåœ¨ Op2
 	if (d_ctx->reg >= 4) {
 		return GetOperandValue(ctx, d_ctx, 1);
 	}
 	return GetOperandValue(ctx, d_ctx, 0); // NOT/NEG
 }
 
-// Ğ´Èë Group 3 ½á¹û
+// å†™å…¥ Group 3 ç»“æœ
 static void SetGroup3Dest(CPU_Context* ctx, DecodeContext* d_ctx, uint32_t val) {
 	SetOperandValue(ctx, d_ctx, 0, val);
 }
 
-// ´¦Àí Group 3 Ö¸Áî (F6/F7: TEST/NOT/NEG/MUL/IMUL/DIV/IDIV)
+// å¤„ç† Group 3 æŒ‡ä»¤ (F6/F7: TEST/NOT/NEG/MUL/IMUL/DIV/IDIV)
 static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 	int size = GetOperandBitSize(ctx, d_ctx, d_ctx->entry.op1);
-	// ×¢Òâ£º¶ÔÓÚ MUL/DIV£¬Op1 ÊÇ AL/AX/EAX£¬Op2 ÊÇ r/m¡£
-	// ÎÒÃÇÖ÷Òª¹ØĞÄ r/m µÄ´óĞ¡£¬µ«ÔÚ disasm ±íÀï Op1 ÒÑ¾­·´Ó³ÁËÕıÈ·µÄ´óĞ¡ (AL=8, EAX=32)
+	// æ³¨æ„ï¼šå¯¹äº MUL/DIVï¼ŒOp1 æ˜¯ AL/AX/EAXï¼ŒOp2 æ˜¯ r/mã€‚
+	// æˆ‘ä»¬ä¸»è¦å…³å¿ƒ r/m çš„å¤§å°ï¼Œä½†åœ¨ disasm è¡¨é‡Œ Op1 å·²ç»åæ˜ äº†æ­£ç¡®çš„å¤§å° (AL=8, EAX=32)
 
-	// »ñÈ¡Ô´²Ù×÷Êı (³ËÊı »ò ³ıÊı)
+	// è·å–æºæ“ä½œæ•° (ä¹˜æ•° æˆ– é™¤æ•°)
 	uint32_t src = GetGroup3Source(ctx, d_ctx);
-	// Õë¶Ô 8/16 Î»½Ø¶ÏÔ´²Ù×÷Êı£¬·ÀÖ¹¸ßÎ»À¬»ø
+	// é’ˆå¯¹ 8/16 ä½æˆªæ–­æºæ“ä½œæ•°ï¼Œé˜²æ­¢é«˜ä½åƒåœ¾
 
 	if (size == 8) src &= 0xFF;
 	else if (size == 16) src &= 0xFFFF;
 
 	switch (d_ctx->reg) {
 		case 0: {// TEST (Iz/Ib)
-		// TEST ±¾ÖÊÊÇ AND£¬µ«²»Ğ´»Ø
-		// ×¢Òâ£ºF6/F7 µÄ TEST Ö¸Áî½á¹¹Í¨³£ÊÇ TEST r/m, imm
-		// disasm ±íÀï group_tables[3/17] µÄ index 0 ÊÇ TEST¡£
-		// µ÷ÓÃÎÒÃÇÖ®Ç°µÄÍ¨ÓÃ ALU º¯Êı¼´¿É
-			Exec_ALU_Generic(ctx, d_ctx, ALU_AND, true); // TEST (AND + ²»Ğ´»Ø)
+		// TEST æœ¬è´¨æ˜¯ ANDï¼Œä½†ä¸å†™å›
+		// æ³¨æ„ï¼šF6/F7 çš„ TEST æŒ‡ä»¤ç»“æ„é€šå¸¸æ˜¯ TEST r/m, imm
+		// disasm è¡¨é‡Œ group_tables[3/17] çš„ index 0 æ˜¯ TESTã€‚
+		// è°ƒç”¨æˆ‘ä»¬ä¹‹å‰çš„é€šç”¨ ALU å‡½æ•°å³å¯
+			Exec_ALU_Generic(ctx, d_ctx, ALU_AND, true); // TEST (AND + ä¸å†™å›)
 			break;
 		}
-		case 2: {// NOT r/m ²»Ó°Ïì±êÖ¾Î»
+		case 2: {// NOT r/m ä¸å½±å“æ ‡å¿—ä½
 			SetGroup3Dest(ctx, d_ctx, ~src);
 			break;
 		}
-		case 3: {// NEG r/m Ä£Äâ 0 - src
+		case 3: {// NEG r/m æ¨¡æ‹Ÿ 0 - src
 			SetGroup3Dest(ctx, d_ctx,(0-src));
 			UpdateEFLAGS(ctx, (0-src), 0, src, size, ALU_SUB);
 			break;
 		}
-		case 4: {// MUL (Unsigned Multiply) Ëã·¨£ºAccumulator * src
+		case 4: {// MUL (Unsigned Multiply) ç®—æ³•ï¼šAccumulator * src
 			if (size == 8) {
 				// AL * r/m8 -> AX
 				uint32_t al = ctx->EAX.I8.L;
 				uint32_t res = al * src;
-				ctx->EAX.I16 = (uint16_t)res; // ½á¹ûĞ´Èë AX
-				// ¸üĞÂ CF/OF: Èç¹û¸ß8Î»(AH)·Ç0ÔòÖÃÎ»
+				ctx->EAX.I16 = (uint16_t)res; // ç»“æœå†™å…¥ AX
+				// æ›´æ–° CF/OF: å¦‚æœé«˜8ä½(AH)é0åˆ™ç½®ä½
 				ctx->EFLAGS.CF = ctx->EFLAGS.OF = (res & 0xFF00) ? 1 : 0;
 
 			}
@@ -1177,29 +1207,29 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 				// AX * r/m16 -> DX:AX
 				uint32_t ax = ctx->EAX.I16;
 				uint32_t res = ax * src;
-				ctx->EDX.I16 = res >> 16; // ¸ß16Î»Ğ´Èë DX
-				ctx->EAX.I16 = res & 0xFFFF; // µÍ32Î»Ğ´Èë AX
+				ctx->EDX.I16 = res >> 16; // é«˜16ä½å†™å…¥ DX
+				ctx->EAX.I16 = res & 0xFFFF; // ä½32ä½å†™å…¥ AX
 				ctx->EFLAGS.CF = ctx->EFLAGS.OF = (ctx->EDX.I16 != 0);
 			}
 			else { //32
 				// EAX * r/m32 -> EDX:EAX
 				uint64_t eax = ctx->EAX.I32;
 				uint64_t res = eax * (uint64_t)src;
-				ctx->EDX.I32 = (uint32_t)(res >> 32); // ¸ß32Î»Ğ´Èë EDX
-				ctx->EAX.I32 = (uint32_t)(res & 0xFFFFFFFF); // µÍ32Î»Ğ´Èë EAX
+				ctx->EDX.I32 = (uint32_t)(res >> 32); // é«˜32ä½å†™å…¥ EDX
+				ctx->EAX.I32 = (uint32_t)(res & 0xFFFFFFFF); // ä½32ä½å†™å…¥ EAX
 				ctx->EFLAGS.CF = ctx->EFLAGS.OF = (ctx->EDX.I32 != 0);
 			}
 			break;
 		}
 		case 5: {
 			if (size == 32) {
-				int64_t eax = (int32_t)ctx->EAX.I32; //µ±Äã°ÑÒ»¸ö 32 Î»µÄ int32_t ¸³Öµ¸ø 64 Î»µÄ int64_t Ê±£¬C++ ±àÒëÆ÷»á×Ô¶¯´¥·¢·ûºÅÀ©Õ¹
-				int64_t val = (int32_t)src; //Èç¹û src µÄ×î¸ßÎ»ÊÇ 1£¬valµÄÇ° 32 Î»¾Í»áÈ«±»Ìî³äÎª 1¡£×¢Òâ²»ÒªÇ¿ÖÆÀàĞÍ×ª»»³É£¨int64_t£©,×¢ÒâÕâÖÖÄ¬ÈÏ×ª»»ºÍÇ¿ÖÆ×ª»»µÄÇø±ğ
+				int64_t eax = (int32_t)ctx->EAX.I32; //å½“ä½ æŠŠä¸€ä¸ª 32 ä½çš„ int32_t èµ‹å€¼ç»™ 64 ä½çš„ int64_t æ—¶ï¼ŒC++ ç¼–è¯‘å™¨ä¼šè‡ªåŠ¨è§¦å‘ç¬¦å·æ‰©å±•
+				int64_t val = (int32_t)src; //å¦‚æœ src çš„æœ€é«˜ä½æ˜¯ 1ï¼Œvalçš„å‰ 32 ä½å°±ä¼šå…¨è¢«å¡«å……ä¸º 1ã€‚æ³¨æ„ä¸è¦å¼ºåˆ¶ç±»å‹è½¬æ¢æˆï¼ˆint64_tï¼‰,æ³¨æ„è¿™ç§é»˜è®¤è½¬æ¢å’Œå¼ºåˆ¶è½¬æ¢çš„åŒºåˆ«
 				int64_t res = eax * val;
-				ctx->EDX.I32 = (uint32_t)(res >> 32); // ¸ß32Î»Ğ´Èë EDX
-				ctx->EAX.I32 = (uint32_t)(res & 0xFFFFFFFF); // µÍ32Î»Ğ´Èë EAX
-			// IMUL ±êÖ¾Î»£ºÈç¹û½á¹ûĞèÒªÀ©Õ¹µ½¸ßÎ»²ÅÄÜ±íÊ¾£¬Ôò CF=OF=1
-			// ¼òµ¥ÅĞ¶Ï£ºÈç¹û result != (int32_t)result£¬ËµÃ÷Òç³öÁË 32 Î»·¶Î§
+				ctx->EDX.I32 = (uint32_t)(res >> 32); // é«˜32ä½å†™å…¥ EDX
+				ctx->EAX.I32 = (uint32_t)(res & 0xFFFFFFFF); // ä½32ä½å†™å…¥ EAX
+			// IMUL æ ‡å¿—ä½ï¼šå¦‚æœç»“æœéœ€è¦æ‰©å±•åˆ°é«˜ä½æ‰èƒ½è¡¨ç¤ºï¼Œåˆ™ CF=OF=1
+			// ç®€å•åˆ¤æ–­ï¼šå¦‚æœ result != (int32_t)resultï¼Œè¯´æ˜æº¢å‡ºäº† 32 ä½èŒƒå›´
 				bool overflow = (res != (int64_t)(int32_t)res);
 				ctx->EFLAGS.CF = ctx->EFLAGS.OF = overflow;
 			}
@@ -1207,10 +1237,10 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 				int32_t ax = (int16_t)ctx->EAX.I16;
 				int32_t val = (int16_t)src;
 				int32_t res = ax * val;
-				ctx->EDX.I16 = (uint32_t)(res >> 16); // ¸ß16Î»Ğ´Èë EDX
-				ctx->EAX.I16 = (uint32_t)(res & 0xFFFF); // µÍ16Î»Ğ´Èë EAX
-				// IMUL ±êÖ¾Î»£ºÈç¹û½á¹ûĞèÒªÀ©Õ¹µ½¸ßÎ»²ÅÄÜ±íÊ¾£¬Ôò CF=OF=1
-				// ¼òµ¥ÅĞ¶Ï£ºÈç¹û result != (int32_t)result£¬ËµÃ÷Òç³öÁË 32 Î»·¶Î§
+				ctx->EDX.I16 = (uint32_t)(res >> 16); // é«˜16ä½å†™å…¥ EDX
+				ctx->EAX.I16 = (uint32_t)(res & 0xFFFF); // ä½16ä½å†™å…¥ EAX
+				// IMUL æ ‡å¿—ä½ï¼šå¦‚æœç»“æœéœ€è¦æ‰©å±•åˆ°é«˜ä½æ‰èƒ½è¡¨ç¤ºï¼Œåˆ™ CF=OF=1
+				// ç®€å•åˆ¤æ–­ï¼šå¦‚æœ result != (int32_t)resultï¼Œè¯´æ˜æº¢å‡ºäº† 32 ä½èŒƒå›´
 				bool overflow = (res != (int32_t)(int16_t)res);
 				ctx->EFLAGS.CF = ctx->EFLAGS.OF = overflow;
 			}
@@ -1218,7 +1248,7 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 				int16_t al = (int8_t)ctx->EAX.I8.L;
 				int16_t val = (int8_t)src;
 				int16_t res = al * val;
-				ctx->EAX.I16 = (uint16_t)res; // ½á¹ûĞ´Èë AX
+				ctx->EAX.I16 = (uint16_t)res; // ç»“æœå†™å…¥ AX
 				bool overflow = (res != (int16_t)(int8_t)res);
 				ctx->EFLAGS.CF = ctx->EFLAGS.OF = overflow;
 			}
@@ -1227,40 +1257,40 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 		case 6: {// DIV (Unsigned Divide)
 			if (src == 0) {
 				printf("[CPU Error] Division by Zero at EIP=0x%08X\n", ctx->EIP);
-				// ÕæÊµ CPU »á´¥·¢ Int 0 Òì³££¬ÕâÀïÎÒÃÇÔİÊ±¼òµ¥´¦Àí£º²»Ö´ĞĞ
+				// çœŸå® CPU ä¼šè§¦å‘ Int 0 å¼‚å¸¸ï¼Œè¿™é‡Œæˆ‘ä»¬æš‚æ—¶ç®€å•å¤„ç†ï¼šä¸æ‰§è¡Œ
 				return;
 			}
 			if (size == 32) {
 				uint64_t dividend = ((uint64_t)ctx->EDX.I32 << 32) | ctx->EAX.I32;
 				uint64_t quo = dividend / src;
 				uint64_t rem = dividend % src;
-				if (quo > 0xFFFFFFFF) {// ÉÌÒç³ö
+				if (quo > 0xFFFFFFFF) {// å•†æº¢å‡º
 					printf("[CPU Error] quotient overflow at EIP=0x%08X\n", ctx->EIP);
 					return;
 				}
 				ctx->EAX.I32 = (uint32_t)quo;
 				ctx->EDX.I32 = (uint32_t)rem;
-				// DIV ±êÖ¾Î»Î´¶¨Òå£¬²»×ö¸üĞÂ
+				// DIV æ ‡å¿—ä½æœªå®šä¹‰ï¼Œä¸åšæ›´æ–°
 			}
 			else if (size == 16) {
 				uint32_t dividend = ((uint32_t)ctx->EDX.I16 << 16) | ctx->EAX.I16;
 				uint32_t quo = dividend / src;
 				uint32_t rem = dividend % src;
-				if (quo > 0xFFFF) {// ÉÌÒç³ö
+				if (quo > 0xFFFF) {// å•†æº¢å‡º
 					printf("[CPU Error] quotient overflow at EIP=0x%08X\n", ctx->EIP);
 					return;
 				}
 				ctx->EAX.I16 = (uint16_t)quo;
 				ctx->EDX.I16 = (uint16_t)rem;
 			}
-			else {//8Î»
-				uint16_t dividend = ctx->EAX.I16; //±»³ıÊı£ºAX
+			else {//8ä½
+				uint16_t dividend = ctx->EAX.I16; //è¢«é™¤æ•°ï¼šAX
 				uint16_t quo = dividend / src;
 				uint16_t rem = dividend % src;
-				if (quo > 0xFF) {// ÉÌÒç³ö
+				if (quo > 0xFF) {// å•†æº¢å‡º
 					printf("[CPU Error] quotient overflow at EIP=0x%08X\n", ctx->EIP);
 					return;
-				}//AH(ÓàÊı):AL£¨ÉÌ£©
+				}//AH(ä½™æ•°):ALï¼ˆå•†ï¼‰
 				ctx->EAX.I8.L = (uint8_t)quo;
 				ctx->EAX.I8.H = (uint8_t)rem;
 			}
@@ -1273,11 +1303,11 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 			}
 
 			if (size == 8) {
-				// ¡¾8Î»¡¿±»³ıÊı£ºAX (16Î»ÓĞ·ûºÅ)
+				// ã€8ä½ã€‘è¢«é™¤æ•°ï¼šAX (16ä½æœ‰ç¬¦å·)
 				int16_t dividend = (int16_t)ctx->EAX.I16;
 				int8_t  divisor = (int8_t)src;
 
-				// ÌØÅĞ INT8_MIN / -1
+				// ç‰¹åˆ¤ INT8_MIN / -1
 				if (dividend == -128 && divisor == -1) goto overflow_label;
 
 				int16_t quo = dividend / divisor;
@@ -1289,7 +1319,7 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 				ctx->EAX.I8.H = (int8_t)rem; // AH
 			}
 			else if (size == 16) {
-				// ¡¾16Î»¡¿±»³ıÊı£ºDX:AX (32Î»ÓĞ·ûºÅÆ´½Ó)
+				// ã€16ä½ã€‘è¢«é™¤æ•°ï¼šDX:AX (32ä½æœ‰ç¬¦å·æ‹¼æ¥)
 				int32_t dividend = (int32_t)(((uint32_t)ctx->EDX.I16 << 16) | (uint16_t)ctx->EAX.I16);
 				int16_t divisor = (int16_t)src;
 
@@ -1304,11 +1334,11 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 				ctx->EDX.I16 = (int16_t)rem; // DX
 			}
 			else if (size == 32) {
-				// ¡¾32Î»¡¿±»³ıÊı£ºEDX:EAX (64Î»ÓĞ·ûºÅÆ´½Ó)
+				// ã€32ä½ã€‘è¢«é™¤æ•°ï¼šEDX:EAX (64ä½æœ‰ç¬¦å·æ‹¼æ¥)
 				int64_t dividend = (int64_t)(((uint64_t)ctx->EDX.I32 << 32) | (uint32_t)ctx->EAX.I32);
 				int32_t divisor = (int32_t)src;
 
-				// ÌØÅĞ LLONG_MIN Çé¿ö£¬·ÀÖ¹ C++ ½ø³ÌÖ±½Ó±ÀÀ£
+				// ç‰¹åˆ¤ LLONG_MIN æƒ…å†µï¼Œé˜²æ­¢ C++ è¿›ç¨‹ç›´æ¥å´©æºƒ
 				if (dividend == (int64_t)0x8000000000000000 && divisor == -1) goto overflow_label;
 
 				int64_t quo = dividend / divisor;
@@ -1323,7 +1353,7 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 
 		overflow_label:
 			printf("[CPU Error] IDIV Quotient Overflow at EIP=0x%08X\n", ctx->EIP);
-			// ÕâÀïÖ» return£¬²»ĞŞ¸ÄÈÎºÎ¼Ä´æÆ÷£¬Ä£ÄâÕæ CPU µÄÒì³£¹ÒÆğĞĞÎª
+			// è¿™é‡Œåª returnï¼Œä¸ä¿®æ”¹ä»»ä½•å¯„å­˜å™¨ï¼Œæ¨¡æ‹ŸçœŸ CPU çš„å¼‚å¸¸æŒ‚èµ·è¡Œä¸º
 			return;
 		}
 		default:
@@ -1332,41 +1362,41 @@ static void Exec_Group3(CPU_Context* ctx, DecodeContext* d_ctx) {
 	return;
 }
 
-uint32_t MemRead(uint32_t addr, int byte_len) {
-	if (byte_len == 1) return *(uint8_t*)addr;
-	else if(byte_len == 2)return *(uint16_t*)addr;
+uint32_t MemRead(uint32_t addr, int uint8_t_len) {
+	if (uint8_t_len == 1) return *(uint8_t*)addr;
+	else if(uint8_t_len == 2)return *(uint16_t*)addr;
 	return *(uint32_t*)addr;
 }
 
-void MemWrite(uint32_t addr, uint32_t val, int byte_len) {
-	if (byte_len == 1) *(uint8_t*)addr = (uint8_t)val;
-	else if(byte_len == 2) *(uint16_t*)addr = (uint16_t)val;
+void MemWrite(uint32_t addr, uint32_t val, int uint8_t_len) {
+	if (uint8_t_len == 1) *(uint8_t*)addr = (uint8_t)val;
+	else if(uint8_t_len == 2) *(uint16_t*)addr = (uint16_t)val;
 	else *(uint32_t*)addr = val;
 }
 
 
 static void Exec_StringOp(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. È·¶¨¿í¶È
+	// 1. ç¡®å®šå®½åº¦
 	int bit_sz = (d_ctx->opcode & 1) ? ((d_ctx->pfx_op_size == 0x66) ? 16 : 32) : 8;
-	int byte_len = bit_sz / 8;
+	int uint8_t_len = bit_sz / 8;
 
-	// 2. Ô¤¼ÆËã²½³¤ (ºËĞÄÓÅ»¯)
-	int step = (ctx->EFLAGS.DF == 0) ? byte_len : -byte_len;
+	// 2. é¢„è®¡ç®—æ­¥é•¿ (æ ¸å¿ƒä¼˜åŒ–)
+	int step = (ctx->EFLAGS.DF == 0) ? uint8_t_len : -uint8_t_len;
 
-	// 3. »ñÈ¡µ±Ç°µØÖ·
+	// 3. è·å–å½“å‰åœ°å€
 	uint32_t esi = ctx->GPR[6].I32;
 	uint32_t edi = ctx->GPR[7].I32;
 
 	switch (d_ctx->opcode & 0xFE) {
 		case 0xA4: {// MOVS
-			MemWrite(edi, MemRead(esi, byte_len), byte_len);
+			MemWrite(edi, MemRead(esi, uint8_t_len), uint8_t_len);
 			ctx->ESI.I32 += step;
 			ctx->EDI.I32 += step;
 			break;
 		}
 		case 0xA6: { // CMPS
-			uint32_t val_src = MemRead(esi, byte_len);
-			uint32_t val_dest = MemRead(edi, byte_len);
+			uint32_t val_src = MemRead(esi, uint8_t_len);
+			uint32_t val_dest = MemRead(edi, uint8_t_len);
 			uint32_t res = val_dest - val_src;
 			UpdateEFLAGS(ctx, res, val_dest, val_src, bit_sz, ALU_SUB);
 			ctx->EDI.I32 += step;
@@ -1378,12 +1408,12 @@ static void Exec_StringOp(CPU_Context* ctx, DecodeContext* d_ctx) {
 			if (bit_sz == 8) val = ctx->EAX.I8.L;
 			else if (bit_sz == 16) val = ctx->EAX.I16;
 			else if (bit_sz == 32) val = ctx->EAX.I32;
-			MemWrite(edi, val, byte_len);
+			MemWrite(edi, val, uint8_t_len);
 			ctx->EDI.I32 += step;
 			break;
 		}
 		case 0xAC: {//LODS
-			uint32_t val = MemRead(esi, byte_len);
+			uint32_t val = MemRead(esi, uint8_t_len);
 			if (bit_sz == 8) ctx->EAX.I8.L = (uint8_t)val;
 			else if (bit_sz == 16) ctx->EAX.I16 = (uint16_t)val;
 			else if (bit_sz == 32) ctx->EAX.I32 = val;
@@ -1391,7 +1421,7 @@ static void Exec_StringOp(CPU_Context* ctx, DecodeContext* d_ctx) {
 			break;
 		}
 		case 0xAE: { // SCAS
-			uint32_t val_dest = MemRead(edi, byte_len);
+			uint32_t val_dest = MemRead(edi, uint8_t_len);
 			uint32_t val_src = 0;
 			if (bit_sz == 8) val_src = ctx->EAX.I8.L;
 			else if (bit_sz == 16) val_src = ctx->EAX.I16;
@@ -1405,17 +1435,17 @@ static void Exec_StringOp(CPU_Context* ctx, DecodeContext* d_ctx) {
 }
 
 static bool Exec_REP_StringOp(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. ³õÊ¼¼ì²é£ºÈç¹û ECX ÒÑ¾­µ½ 0£¬Ñ­»·³¹µ×½áÊø
+	// 1. åˆå§‹æ£€æŸ¥ï¼šå¦‚æœ ECX å·²ç»åˆ° 0ï¼Œå¾ªç¯å½»åº•ç»“æŸ
 	if(ctx->ECX.I32 == 0) return false;
-	// 2. Ö´ĞĞµ¥´Î²Ù×÷
+	// 2. æ‰§è¡Œå•æ¬¡æ“ä½œ
 	Exec_StringOp(ctx, d_ctx);
-	//3. µİ¼õ ECX
+	//3. é€’å‡ ECX
 	ctx->ECX.I32--;
-	// 4. ÅĞ¶ÏÊÇ·ñÒª¡°Í£ÔÚÔ­µØ¡±¼ÌĞøÏÂÒ»´ÎÑ­»·
-	// »ù±¾Ìõ¼ş£ºECX »¹Ã»¼õµ½ 0
+	// 4. åˆ¤æ–­æ˜¯å¦è¦â€œåœåœ¨åŸåœ°â€ç»§ç»­ä¸‹ä¸€æ¬¡å¾ªç¯
+	// åŸºæœ¬æ¡ä»¶ï¼šECX è¿˜æ²¡å‡åˆ° 0
 	bool should_continue = (ctx->ECX.I32 > 0);
-	// 5. ´¦Àí SCAS / CMPS µÄ¶îÍâÖÕÖ¹Ìõ¼ş (ZF)
-	// ¼¼ÇÉ£ºÀûÓÃÎ»ÔËËã¿ìËÙÊ¶±ğ A6, A7 (CMPS) ºÍ AE, AF (SCAS)
+	// 5. å¤„ç† SCAS / CMPS çš„é¢å¤–ç»ˆæ­¢æ¡ä»¶ (ZF)
+	// æŠ€å·§ï¼šåˆ©ç”¨ä½è¿ç®—å¿«é€Ÿè¯†åˆ« A6, A7 (CMPS) å’Œ AE, AF (SCAS)
 	bool is_compare_op = (d_ctx->opcode & 0xA6) == 0xA6;
 	if (is_compare_op && should_continue) {
 		if (d_ctx->pfx_rep) {
@@ -1429,13 +1459,13 @@ static bool Exec_REP_StringOp(CPU_Context* ctx, DecodeContext* d_ctx) {
 }
 
 static void Exec_LEA(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. ¼ÆËãÓĞĞ§µØÖ· (Effective Address)
-	// ÕâÀïµÄºËĞÄÊÇ¸´ÓÃ GetEffectiveAddress£¬µ«¼á¾ö²»Òªµ÷ÓÃ MemRead£¡
+	// 1. è®¡ç®—æœ‰æ•ˆåœ°å€ (Effective Address)
+	// è¿™é‡Œçš„æ ¸å¿ƒæ˜¯å¤ç”¨ GetEffectiveAddressï¼Œä½†åšå†³ä¸è¦è°ƒç”¨ MemReadï¼
 	uint32_t addr = GetEffectiveAddress(ctx, d_ctx);
-	// 2. ½«µØÖ·±¾ÉíĞ´ÈëÄ¿µÄ¼Ä´æÆ÷
-	// LEA µÄÄ¿µÄ²Ù×÷ÊıÍ¨³£ÊÇ Gv (32Î»Í¨ÓÃ¼Ä´æÆ÷)
+	// 2. å°†åœ°å€æœ¬èº«å†™å…¥ç›®çš„å¯„å­˜å™¨
+	// LEA çš„ç›®çš„æ“ä½œæ•°é€šå¸¸æ˜¯ Gv (32ä½é€šç”¨å¯„å­˜å™¨)
 	SetOperandValue(ctx, d_ctx, 0, addr);
-	// ×¢Òâ£ºLEA ²»¸Ä±äÈÎºÎ±êÖ¾Î» (EFLAGS)
+	// æ³¨æ„ï¼šLEA ä¸æ”¹å˜ä»»ä½•æ ‡å¿—ä½ (EFLAGS)
 }
 
 static void Exec_XCHG(CPU_Context* ctx, DecodeContext* d_ctx) {
@@ -1445,22 +1475,22 @@ static void Exec_XCHG(CPU_Context* ctx, DecodeContext* d_ctx) {
 	SetOperandValue(ctx, d_ctx, 0, op2);
 }
 
-// ¸¨Öú£º½« EFLAGS ½á¹¹Ìå´ò°ü³É 32Î» ÕûÊı
+// è¾…åŠ©ï¼šå°† EFLAGS ç»“æ„ä½“æ‰“åŒ…æˆ 32ä½ æ•´æ•°
 static uint32_t PackEFLAGS(CPU_Context* ctx)
 {
-	// ¼òµ¥´Ö±©·¨£ºÀûÓÃ union µÄ¹²ÓÃÌåÌØĞÔ (¼ÙÉèÊÇĞ¡¶ËĞò)
-	// µ«ÎªÁËÑÏ½÷£¬x86 ¹æ¶¨ Bit 1 ÓÀÔ¶ÊÇ 1£¬Bit 3,5,15 ÓÀÔ¶ÊÇ 0
+	// ç®€å•ç²—æš´æ³•ï¼šåˆ©ç”¨ union çš„å…±ç”¨ä½“ç‰¹æ€§ (å‡è®¾æ˜¯å°ç«¯åº)
+	// ä½†ä¸ºäº†ä¸¥è°¨ï¼Œx86 è§„å®š Bit 1 æ°¸è¿œæ˜¯ 1ï¼ŒBit 3,5,15 æ°¸è¿œæ˜¯ 0
 	uint32_t raw = ctx->EFLAGS.Value;
 	raw |= 0x00000002; // Bit 1 always 1
 	raw &= ~0x00008028; // Bit 3, 5, 15 always 0 (0x8000 + 0x20 + 0x08)
 	return raw;
 }
 
-// ¸¨Öú£º´Ó 32Î» ÕûÊı½â°üµ½ EFLAGS
+// è¾…åŠ©ï¼šä» 32ä½ æ•´æ•°è§£åŒ…åˆ° EFLAGS
 static void UnpackEFLAGS(CPU_Context* ctx, uint32_t val)
 {
-	// ±£ÁôÎ»´¦Àí£ºÍ¨³£ÎÒÃÇ²»Ï£ÍûÓÃ»§ĞŞ¸Ä±£ÁôÎ»
-	// µ«Ä£ÄâÆ÷ÎªÁË¼òµ¥£¬¿ÉÒÔÖ±½Ó¸³Öµ£¬Ö»ÊÇÇ¿ĞĞĞŞÕı¹Ì¶¨Î»
+	// ä¿ç•™ä½å¤„ç†ï¼šé€šå¸¸æˆ‘ä»¬ä¸å¸Œæœ›ç”¨æˆ·ä¿®æ”¹ä¿ç•™ä½
+	// ä½†æ¨¡æ‹Ÿå™¨ä¸ºäº†ç®€å•ï¼Œå¯ä»¥ç›´æ¥èµ‹å€¼ï¼Œåªæ˜¯å¼ºè¡Œä¿®æ­£å›ºå®šä½
 	ctx->EFLAGS.Value = val;
 	ctx->EFLAGS.Value |= 0x00000002; // Bit 1 always 1
 }
@@ -1468,57 +1498,57 @@ static void UnpackEFLAGS(CPU_Context* ctx, uint32_t val)
 // PUSHF (0x9C)
 static void Exec_PUSHF(CPU_Context* ctx) {
 	uint32_t eflags = PackEFLAGS(ctx);
-	// Ñ¹Õ» (32Î»)
+	// å‹æ ˆ (32ä½)
 	ctx->ESP.I32 -= 4;
 	MemWrite(ctx->ESP.I32, eflags, 4);
 }
 //POPF (0x9D)
 static void Exec_POPF(CPU_Context* ctx) {
-	// µ¯Õ» (32Î»)
+	// å¼¹æ ˆ (32ä½)
 	uint32_t eflags = MemRead(ctx->ESP.I32, 4);
 	ctx->ESP.I32 += 4;
 	UnpackEFLAGS(ctx, eflags);
 }
-// LEAVE (0xC9): »Ö¸´Õ»Ö¡
-// µÈ¼ÛÓÚ: MOV ESP, EBP; POP EBP;
+// LEAVE (0xC9): æ¢å¤æ ˆå¸§
+// ç­‰ä»·äº: MOV ESP, EBP; POP EBP;
 static void Exec_LEAVE(CPU_Context* ctx) {
 	ctx->ESP.I32 = ctx->EBP.I32;
 	ctx->EBP.I32 = MemRead(ctx->ESP.I32, 4);
 	ctx->ESP.I32 += 4;
 }
-// ´Ó½âÂëÉÏÏÂÎÄÖĞ»ñÈ¡²ÎÊı
-// ½âÂëÆ÷°ÑµÚÒ»¸öÁ¢¼´Êı(size)·ÅÔÚ imm£¬µÚ¶ş¸ö(level)·ÅÔÚ imm2
+// ä»è§£ç ä¸Šä¸‹æ–‡ä¸­è·å–å‚æ•°
+// è§£ç å™¨æŠŠç¬¬ä¸€ä¸ªç«‹å³æ•°(size)æ”¾åœ¨ immï¼Œç¬¬äºŒä¸ª(level)æ”¾åœ¨ imm2
 static void Exec_ENTER(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// ²ÎÊı1:·ÖÅäµÄÕ»¿Õ¼ä´óĞ¡ (16Î»)
+	// å‚æ•°1:åˆ†é…çš„æ ˆç©ºé—´å¤§å° (16ä½)
 	uint16_t size = (uint16_t)d_ctx->imm;
-	// ²ÎÊı2:µ÷ÓÃ²ã¼¶ (16Î»)
-	uint8_t level = (uint8_t)(d_ctx->imm2 & 0x1F); // Intel ÏŞÖÆ×î´ó 31 ²ã
-	// 2. PUSH EBP (±£´æ¾ÉµÄÖ¡Ö¸Õë)
+	// å‚æ•°2:è°ƒç”¨å±‚çº§ (16ä½)
+	uint8_t level = (uint8_t)(d_ctx->imm2 & 0x1F); // Intel é™åˆ¶æœ€å¤§ 31 å±‚
+	// 2. PUSH EBP (ä¿å­˜æ—§çš„å¸§æŒ‡é’ˆ)
 	ctx->ESP.I32 -= 4;
 	MemWrite(ctx->ESP.I32, ctx->EBP.I32, 4);
-	// Ôİ´æµ±Ç°µÄÕ»¶¥×÷ÎªĞÂµÄÖ¡Ö¸ÕëÆğµã
+	// æš‚å­˜å½“å‰çš„æ ˆé¡¶ä½œä¸ºæ–°çš„å¸§æŒ‡é’ˆèµ·ç‚¹
 	uint32_t fp = ctx->ESP.I32;
-	// 2. ´¦ÀíÇ¶Ì×²ã¼¶ (Display)
-	// ÕâÊÇÎªÁËÈÃÇ¶Ì×º¯ÊıÄÜ·ÃÎÊ¸¸¼¶º¯ÊıµÄ¾Ö²¿±äÁ¿
+	// 2. å¤„ç†åµŒå¥—å±‚çº§ (Display)
+	// è¿™æ˜¯ä¸ºäº†è®©åµŒå¥—å‡½æ•°èƒ½è®¿é—®çˆ¶çº§å‡½æ•°çš„å±€éƒ¨å˜é‡
 	if (level > 0) {
-		uint32_t temp_fp = ctx->EBP.I32;//³õÊ¼»¹ÊÇ¸¸º¯ÊıµÄebpÆğÊ¼
-		for (int i = 1; i < level; i++) {//´Ó1¿ª¿ªÊ¼£¬µ±Ç°µÄÕ»Ö¸ÕëÔÚºóÃæ¸ø
+		uint32_t temp_fp = ctx->EBP.I32;//åˆå§‹è¿˜æ˜¯çˆ¶å‡½æ•°çš„ebpèµ·å§‹
+		for (int i = 1; i < level; i++) {//ä»1å¼€å¼€å§‹ï¼Œå½“å‰çš„æ ˆæŒ‡é’ˆåœ¨åé¢ç»™
 			temp_fp -= 4;
 			ctx->ESP.I32 -= 4;
 			uint32_t parent_fp = MemRead(temp_fp, 4);
 			MemWrite(ctx->ESP.I32, parent_fp, 4);
 		}
-		// ×îºóÒ»´Î PUSH µ±Ç°µÄÖ¡Ö¸Õë
+		// æœ€åä¸€æ¬¡ PUSH å½“å‰çš„å¸§æŒ‡é’ˆ
 		ctx->ESP.I32 -= 4;
 		MemWrite(ctx->ESP.I32, fp, 4);
 	}
-	//3.¸üĞÂ¼Ä´æÆ÷×´Ì¬,·ÖÅäÕ»¿Õ¼ä
+	//3.æ›´æ–°å¯„å­˜å™¨çŠ¶æ€,åˆ†é…æ ˆç©ºé—´
 	ctx->EBP.I32 = fp;
 	ctx->ESP.I32 -= size;
 
 }
 
-// ´¦Àí Group 4 (0xFE): Ö»ÓĞ INC Eb / DEC Eb
+// å¤„ç† Group 4 (0xFE): åªæœ‰ INC Eb / DEC Eb
 static void Exec_Group4(CPU_Context* ctx, DecodeContext* d_ctx) {
 	uint32_t val = GetOperandValue(ctx, d_ctx, 0);
 	switch (d_ctx->reg) {
@@ -1531,10 +1561,10 @@ static void Exec_Group4(CPU_Context* ctx, DecodeContext* d_ctx) {
 	}
 }
 
-// ´¦Àí Group 5 (0xFF): INC/DEC/CALL/JMP/PUSH
+// å¤„ç† Group 5 (0xFF): INC/DEC/CALL/JMP/PUSH
 static bool Exec_Group5(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// »ñÈ¡²Ù×÷Êı (Ä¿±êµØÖ·»òÒª²Ù×÷µÄÖµ)
-	// ×¢Òâ£º¶ÔÓÚ CALL/JMP£¬Op1 (Ev) ÊÇ´æ·Å"Ä¿±êµØÖ·"µÄÈİÆ÷
+	// è·å–æ“ä½œæ•° (ç›®æ ‡åœ°å€æˆ–è¦æ“ä½œçš„å€¼)
+	// æ³¨æ„ï¼šå¯¹äº CALL/JMPï¼ŒOp1 (Ev) æ˜¯å­˜æ”¾"ç›®æ ‡åœ°å€"çš„å®¹å™¨
 	uint32_t val = GetOperandValue(ctx, d_ctx, 0);
 	bool jumped = false;
 	switch (d_ctx->reg) {
@@ -1542,23 +1572,23 @@ static bool Exec_Group5(CPU_Context* ctx, DecodeContext* d_ctx) {
 			Exec_ALU_Generic(ctx, d_ctx, ALU_INC, false); break;
 		case 1: // DEC Ev
 			Exec_ALU_Generic(ctx, d_ctx, ALU_DEC, false); break;
-		case 2: {// CALL Ev(¾ø¶Ô¼ä½Óµ÷ÓÃ)
-			uint32_t retaddr = ctx->EIP + d_ctx->instr_len;// 1. Ñ¹Èë·µ»ØµØÖ· (µ±Ç° EIP + Ö¸Áî³¤¶È)
+		case 2: {// CALL Ev(ç»å¯¹é—´æ¥è°ƒç”¨)
+			uint32_t retaddr = ctx->EIP + d_ctx->instr_len;// 1. å‹å…¥è¿”å›åœ°å€ (å½“å‰ EIP + æŒ‡ä»¤é•¿åº¦)
 			ctx->ESP.I32 -= 4;
-			MemWrite(ctx->ESP.I32,retaddr,4); // 2. Ìø×ªµ½¾ø¶ÔµØÖ· (val ¾ÍÊÇÄ¿±êµØÖ·)
-			ctx->EIP = val;// ×¢Òâ£ºÍâ²ãĞèÒªÖªµÀ·¢ÉúÁËÌø×ª
+			MemWrite(ctx->ESP.I32,retaddr,4); // 2. è·³è½¬åˆ°ç»å¯¹åœ°å€ (val å°±æ˜¯ç›®æ ‡åœ°å€)
+			ctx->EIP = val;// æ³¨æ„ï¼šå¤–å±‚éœ€è¦çŸ¥é“å‘ç”Ÿäº†è·³è½¬
 			jumped = true;
 			break;
 		}
-		case 3: // CALL Mp (Far Call) - ÔİÊ±²»Ö§³Ö±£»¤Ä£Ê½¿ç¶Î
+		case 3: // CALL Mp (Far Call) - æš‚æ—¶ä¸æ”¯æŒä¿æŠ¤æ¨¡å¼è·¨æ®µ
 			printf("[Warning] CALL FAR not supported yet.\n");
 			break;
-		case 4: {// JMP Ev (¾ø¶Ô¼ä½ÓÌø×ª)
-			ctx->EIP = val; // Ö±½ÓÌø×ªµ½Ä¿±êµØÖ·
+		case 4: {// JMP Ev (ç»å¯¹é—´æ¥è·³è½¬)
+			ctx->EIP = val; // ç›´æ¥è·³è½¬åˆ°ç›®æ ‡åœ°å€
 			jumped = true;
 			break;
 		}
-		case 5: // JMP Mp (Far Jump) - ÔİÊ±²»Ö§³Ö±£»¤Ä£Ê½¿ç¶Î
+		case 5: // JMP Mp (Far Jump) - æš‚æ—¶ä¸æ”¯æŒä¿æŠ¤æ¨¡å¼è·¨æ®µ
 			printf("[Warning] JMP FAR not supported yet.\n");
 			break;
 		case 6: // PUSH Ev
@@ -1572,68 +1602,68 @@ static bool Exec_Group5(CPU_Context* ctx, DecodeContext* d_ctx) {
 	return jumped;
 }
 
-// MOVZX: Zero Extend (ÁãÀ©Õ¹)
-// src_bits: Ô´²Ù×÷ÊıÎ»Êı (8 »ò 16)
+// MOVZX: Zero Extend (é›¶æ‰©å±•)
+// src_bits: æºæ“ä½œæ•°ä½æ•° (8 æˆ– 16)
 static void Exec_MOVZX(CPU_Context* ctx, DecodeContext* d_ctx, int src_bits) {
-	uint32_t val = GetOperandValue(ctx, d_ctx, 1); // Ô´²Ù×÷ÊıÔÚ Op2
-	// Ç¿ÖÆ½Ø¶Ï¸ßÎ»£¬È·±£¸ßÎ»Îª0
+	uint32_t val = GetOperandValue(ctx, d_ctx, 1); // æºæ“ä½œæ•°åœ¨ Op2
+	// å¼ºåˆ¶æˆªæ–­é«˜ä½ï¼Œç¡®ä¿é«˜ä½ä¸º0
 	if (src_bits == 8) val &= 0xFF;
 	else if(src_bits ==16) val &= 0xFFFF;
-	// Ğ´Èë Op1 (Í¨³£ÊÇ 32Î»¼Ä´æÆ÷)
+	// å†™å…¥ Op1 (é€šå¸¸æ˜¯ 32ä½å¯„å­˜å™¨)
 	SetOperandValue(ctx, d_ctx, 0, val);
 
 }
 
-// MOVSX: Sign Extend (·ûºÅÀ©Õ¹)
+// MOVSX: Sign Extend (ç¬¦å·æ‰©å±•)
 static void Exec_MOVSX(CPU_Context* ctx, DecodeContext* d_ctx, int src_bits) {
-	uint32_t val = GetOperandValue(ctx, d_ctx, 1); // Ô´²Ù×÷ÊıÔÚ Op2
+	uint32_t val = GetOperandValue(ctx, d_ctx, 1); // æºæ“ä½œæ•°åœ¨ Op2
 	int32_t res = 0;
-	// ·ûºÅÀ©Õ¹
-	if (src_bits == 8) res = (int32_t)(int8_t)val;// ÏÈ×ªÎª int8_t ½Ø¶Ï²¢±£Áô·ûºÅ£¬ÔÙ×ªÎª int32_t ´¥·¢·ûºÅÀ©Õ¹
-	else if (src_bits == 16) res = (int32_t)(int8_t)val; //ÀûÓÃ C ÓïÑÔµÄÓĞ·ûºÅÀàĞÍ×ª»»ÌØĞÔÀ´ÊµÏÖ·ûºÅÀ©Õ¹
+	// ç¬¦å·æ‰©å±•
+	if (src_bits == 8) res = (int32_t)(int8_t)val;// å…ˆè½¬ä¸º int8_t æˆªæ–­å¹¶ä¿ç•™ç¬¦å·ï¼Œå†è½¬ä¸º int32_t è§¦å‘ç¬¦å·æ‰©å±•
+	else if (src_bits == 16) res = (int32_t)(int8_t)val; //åˆ©ç”¨ C è¯­è¨€çš„æœ‰ç¬¦å·ç±»å‹è½¬æ¢ç‰¹æ€§æ¥å®ç°ç¬¦å·æ‰©å±•
 	SetOperandValue(ctx, d_ctx, 0, (uint32_t)res);
 }
 
 // SETcc Eb
 static void Exec_SETcc(CPU_Context* ctx, DecodeContext* d_ctx) {
 	  bool match = CheckCondition(ctx, d_ctx->opcode);
-	  // SETcc Ö»Ğ´Èë 1 ¸ö×Ö½Ú (Eb)
+	  // SETcc åªå†™å…¥ 1 ä¸ªå­—èŠ‚ (Eb)
 	  SetOperandValue(ctx, d_ctx, 0, match ? 1 : 0);
 }
 
 static void Exec_CMOVcc(CPU_Context* ctx, DecodeContext* d_ctx) {
-	bool match = CheckCondition(ctx, d_ctx->opcode); //¼ì²éÌõ¼ş
-	if (match) {// Ìõ¼ş³ÉÁ¢£ºÖ´ĞĞ´«ËÍ
-		uint32_t val = GetOperandValue(ctx, d_ctx, 1); //»ñÈ¡Ô´²Ù×÷Êı
-		SetOperandValue(ctx, d_ctx, 0, val); //Ğ´ÈëÄ¿µÄ²Ù×÷Êı
+	bool match = CheckCondition(ctx, d_ctx->opcode); //æ£€æŸ¥æ¡ä»¶
+	if (match) {// æ¡ä»¶æˆç«‹ï¼šæ‰§è¡Œä¼ é€
+		uint32_t val = GetOperandValue(ctx, d_ctx, 1); //è·å–æºæ“ä½œæ•°
+		SetOperandValue(ctx, d_ctx, 0, val); //å†™å…¥ç›®çš„æ“ä½œæ•°
 	}
-	// Ìõ¼ş²»³ÉÁ¢£ºÊ²Ã´¶¼²»×ö (NOP)
+	// æ¡ä»¶ä¸æˆç«‹ï¼šä»€ä¹ˆéƒ½ä¸åš (NOP)
 }
 
 // IMUL Gv, Ev (0x0F AF)
-// ÓĞ·ûºÅ³Ë·¨£¬Ë«²Ù×÷Êı°æ±¾£ºDest = Dest * Src
+// æœ‰ç¬¦å·ä¹˜æ³•ï¼ŒåŒæ“ä½œæ•°ç‰ˆæœ¬ï¼šDest = Dest * Src
 static void Exec_IMUL_2_Op(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. È·¶¨Î»¿í (16 »ò 32)
+	// 1. ç¡®å®šä½å®½ (16 æˆ– 32)
 	int size = (d_ctx->pfx_op_size == 0x66) ? 16 : 32;
 
-	// 2. ¶ÁÈ¡²Ù×÷Êı
-	// Op1 ÊÇ Dest (Gv), Op2 ÊÇ Src (Ev)
-	// ×¢Òâ£ºGetOperandValue »á×Ô¶¯´¦Àí¼Ä´æÆ÷»òÄÚ´æ¶ÁÈ¡
+	// 2. è¯»å–æ“ä½œæ•°
+	// Op1 æ˜¯ Dest (Gv), Op2 æ˜¯ Src (Ev)
+	// æ³¨æ„ï¼šGetOperandValue ä¼šè‡ªåŠ¨å¤„ç†å¯„å­˜å™¨æˆ–å†…å­˜è¯»å–
 	uint32_t val_dest = GetOperandValue(ctx, d_ctx, 0);
 	uint32_t val_src = GetOperandValue(ctx, d_ctx, 1);
 
-	// 3. Ö´ĞĞÔËËãÓë±êÖ¾Î»¼ÆËã
+	// 3. æ‰§è¡Œè¿ç®—ä¸æ ‡å¿—ä½è®¡ç®—
 	if (size == 16) {
 		int16_t d = (int16_t)val_dest;
 		int16_t s = (int16_t)val_src;
-		int32_t res = d * s; // ÓÃ¸ü´óÒ»¼¶ÀàĞÍ¼ÆËãÒÔ¼ì²âÒç³ö
+		int32_t res = d * s; // ç”¨æ›´å¤§ä¸€çº§ç±»å‹è®¡ç®—ä»¥æ£€æµ‹æº¢å‡º
 
-		// Ğ´Èë½á¹û (½Ø¶Ï»Ø 16 Î»)
+		// å†™å…¥ç»“æœ (æˆªæ–­å› 16 ä½)
 		SetOperandValue(ctx, d_ctx, 0, (uint16_t)res);
 
-		// ¸üĞÂ CF/OF
-		// ¹æÔò£ºÈç¹û³Ë»ı½á¹û³¬³öÁËÄ¿±ê´óĞ¡(16Î»)ÄÜ±íÊ¾µÄ·¶Î§£¬CF=OF=1
-		// ¼ì²é·½·¨£º¿´ res ÊÇ·ñµÈÓÚ res Ç¿×ª»Ø int16 ÔÙ×ª»Ø int32 µÄÖµ
+		// æ›´æ–° CF/OF
+		// è§„åˆ™ï¼šå¦‚æœä¹˜ç§¯ç»“æœè¶…å‡ºäº†ç›®æ ‡å¤§å°(16ä½)èƒ½è¡¨ç¤ºçš„èŒƒå›´ï¼ŒCF=OF=1
+		// æ£€æŸ¥æ–¹æ³•ï¼šçœ‹ res æ˜¯å¦ç­‰äº res å¼ºè½¬å› int16 å†è½¬å› int32 çš„å€¼
 		if (res != (int32_t)(int16_t)res) {
 			ctx->EFLAGS.CF = ctx->EFLAGS.OF = 1;
 		}
@@ -1646,10 +1676,10 @@ static void Exec_IMUL_2_Op(CPU_Context* ctx, DecodeContext* d_ctx) {
 		int32_t s = (int32_t)val_src;
 		int64_t res = (int64_t)d * (int64_t)s;
 
-		// Ğ´Èë½á¹û (½Ø¶Ï»Ø 32 Î»)
+		// å†™å…¥ç»“æœ (æˆªæ–­å› 32 ä½)
 		SetOperandValue(ctx, d_ctx, 0, (uint32_t)res);
 
-		// ¸üĞÂ CF/OF
+		// æ›´æ–° CF/OF
 		if (res != (int64_t)(int32_t)res) {
 			ctx->EFLAGS.CF = ctx->EFLAGS.OF = 1;
 		}
@@ -1657,11 +1687,11 @@ static void Exec_IMUL_2_Op(CPU_Context* ctx, DecodeContext* d_ctx) {
 			ctx->EFLAGS.CF = ctx->EFLAGS.OF = 0;
 		}
 	}
-	// SF, ZF, AF, PF ÔÚ IMUL ÖĞÊÇÎ´¶¨ÒåµÄ (Undefined)£¬ÎÒÃÇÍ¨³£±£³Ö²»±ä»òËæÒâ¡£
-	// ÎªÁË¼òµ¥£¬ÎÒÃÇ²»¸üĞÂÕâĞ©±êÖ¾Î»¡£
+	// SF, ZF, AF, PF åœ¨ IMUL ä¸­æ˜¯æœªå®šä¹‰çš„ (Undefined)ï¼Œæˆ‘ä»¬é€šå¸¸ä¿æŒä¸å˜æˆ–éšæ„ã€‚
+	// ä¸ºäº†ç®€å•ï¼Œæˆ‘ä»¬ä¸æ›´æ–°è¿™äº›æ ‡å¿—ä½ã€‚
 }
 
-// ´¦Àí 0x98 (CBW/CWDE) ºÍ 0x99 (CWD/CDQ)
+// å¤„ç† 0x98 (CBW/CWDE) å’Œ 0x99 (CWD/CDQ)
 static void Exec_SignExtend(CPU_Context* ctx, DecodeContext* d_ctx) {
 	int op_size = (d_ctx->pfx_op_size == 0x66) ? 16 : 32;
 
@@ -1689,25 +1719,25 @@ static void Exec_SignExtend(CPU_Context* ctx, DecodeContext* d_ctx) {
 	}
 }
 
-// ´¦Àí INT n (0xCD) ºÍ INT 3 (0xCC)
-// ÎÒÃÇ½«ÔÚÕâÀïÍ¨¹ı HLE (¸ß²ãÄ£Äâ) À¹½ØÏµÍ³µ÷ÓÃ
+// å¤„ç† INT n (0xCD) å’Œ INT 3 (0xCC)
+// æˆ‘ä»¬å°†åœ¨è¿™é‡Œé€šè¿‡ HLE (é«˜å±‚æ¨¡æ‹Ÿ) æ‹¦æˆªç³»ç»Ÿè°ƒç”¨
 static void Exec_INT(CPU_Context* ctx, DecodeContext* d_ctx) {
 	uint8_t int_num = 0;
-	// Çø·Ö INT 3 (0xCC) ºÍ INT n (0xCD imm8)
+	// åŒºåˆ† INT 3 (0xCC) å’Œ INT n (0xCD imm8)
 	if (d_ctx->opcode == 0xCC) {
 		int_num = 3;
 	}
 	else{
 		int_num = (uint8_t)d_ctx->imm;
 	}
-	// --- High Level Emulation (HLE) À¹½Ø ---
-	// ÎÒÃÇÃ»ÓĞÕæÊµµÄÄÚºË£¬ËùÒÔÔÚÕâÀïÓÃ C ´úÂëÄ£Äâ²Ù×÷ÏµÍ³ĞĞÎª
+	// --- High Level Emulation (HLE) æ‹¦æˆª ---
+	// æˆ‘ä»¬æ²¡æœ‰çœŸå®çš„å†…æ ¸ï¼Œæ‰€ä»¥åœ¨è¿™é‡Œç”¨ C ä»£ç æ¨¡æ‹Ÿæ“ä½œç³»ç»Ÿè¡Œä¸º
 
 	if (int_num == 0x21) {
-		// [DOS API Ä£Äâ]
-		// AH = 0x02: Êä³ö×Ö·û (DL = ×Ö·û)
-		// AH = 0x09: Êä³ö×Ö·û´® (DS:DX = ×Ö·û´®, '$' ½áÎ²)
-		// AH = 0x4C: ÍË³ö³ÌĞò
+		// [DOS API æ¨¡æ‹Ÿ]
+		// AH = 0x02: è¾“å‡ºå­—ç¬¦ (DL = å­—ç¬¦)
+		// AH = 0x09: è¾“å‡ºå­—ç¬¦ä¸² (DS:DX = å­—ç¬¦ä¸², '$' ç»“å°¾)
+		// AH = 0x4C: é€€å‡ºç¨‹åº
 		uint8_t ah = ctx->EAX.I8.H;
 		switch (ah) {
 			case 0x02: {// PutChar
@@ -1716,12 +1746,12 @@ static void Exec_INT(CPU_Context* ctx, DecodeContext* d_ctx) {
 				break;
 			}
 			case 0x09: {// PutString
-				// DOS ×Ö·û´®ÒÔ '$' ½áÊø
-				// »ñÈ¡ÎïÀíµØÖ·: DS << 4 + DX (ÊµÄ£Ê½) »òÕß DS base + EDX (±£»¤Ä£Ê½)
-				// ¼òµ¥Æğ¼û£¬ÎÒÃÇ¼ÙÉèÊÇ Flat Model£¬Ö±½ÓÓÃ EDX
+				// DOS å­—ç¬¦ä¸²ä»¥ '$' ç»“æŸ
+				// è·å–ç‰©ç†åœ°å€: DS << 4 + DX (å®æ¨¡å¼) æˆ–è€… DS base + EDX (ä¿æŠ¤æ¨¡å¼)
+				// ç®€å•èµ·è§ï¼Œæˆ‘ä»¬å‡è®¾æ˜¯ Flat Modelï¼Œç›´æ¥ç”¨ EDX
 				uint32_t addr = ctx->EDX.I32;
 				char ch = MemRead(addr, 1);
-				while (ch != '$' && ch != 0) {// ·ÀÓùĞÔ£ºÓöµ½ 0 Ò²Í£
+				while (ch != '$' && ch != 0) {// é˜²å¾¡æ€§ï¼šé‡åˆ° 0 ä¹Ÿåœ
 					putchar(ch);
 					addr++;
 					ch = MemRead(addr, 1);
@@ -1741,7 +1771,7 @@ static void Exec_INT(CPU_Context* ctx, DecodeContext* d_ctx) {
 	}
 	else if (int_num == 3) {
 		printf("\n[TinyX86] Breakpoint Hit (INT 3) at EIP=0x%08X\n", ctx->EIP);
-		// ÔÚµ÷ÊÔÆ÷ÖĞ£¬ÕâÀï»áÔİÍ£ CPU Ñ­»·,ÉèÖÃÍ£Ö¹±ê¼Ç
+		// åœ¨è°ƒè¯•å™¨ä¸­ï¼Œè¿™é‡Œä¼šæš‚åœ CPU å¾ªç¯,è®¾ç½®åœæ­¢æ ‡è®°
 		ctx->Halted = true;
 	}
 	else
@@ -1751,8 +1781,8 @@ static void Exec_INT(CPU_Context* ctx, DecodeContext* d_ctx) {
 }
 
 static bool Exec_LOOP(CPU_Context* ctx, DecodeContext* d_ctx) {
-	// 1. µİ¼õ¼ÆÊıÆ÷ (ECX/CX)
-	// ¸ù¾İµØÖ·´óĞ¡Ç°×º (0x67) ÅĞ¶ÏÊÇÊ¹ÓÃ ECX »¹ÊÇ CX
+	// 1. é€’å‡è®¡æ•°å™¨ (ECX/CX)
+	// æ ¹æ®åœ°å€å¤§å°å‰ç¼€ (0x67) åˆ¤æ–­æ˜¯ä½¿ç”¨ ECX è¿˜æ˜¯ CX
 	bool condition = false;
 	uint32_t counter;
 	if (d_ctx->pfx_addr_size == 0x67) {
@@ -1761,7 +1791,7 @@ static bool Exec_LOOP(CPU_Context* ctx, DecodeContext* d_ctx) {
 	else {
 		counter = --(ctx->ECX.I32);
 	}
-	// 2. ¼ì²éÌõ¼ş
+	// 2. æ£€æŸ¥æ¡ä»¶
 	bool counter_not_zero = (counter != 0);
 	if (d_ctx->opcode == 0xE2) { // LOOP
 		condition = counter_not_zero;
@@ -1772,27 +1802,27 @@ static bool Exec_LOOP(CPU_Context* ctx, DecodeContext* d_ctx) {
 	else if (d_ctx->opcode == 0xE0) {// LOOPNE / LOOPNZ
 		condition = counter_not_zero && (ctx->EFLAGS.ZF == 0);
 	}
-	// 3. Ö´ĞĞÌø×ª
+	// 3. æ‰§è¡Œè·³è½¬
 	if (condition) {
-		ctx->EIP += d_ctx->disp_len +(int8_t)d_ctx->imm; // ÓĞ·ûºÅÆ«ÒÆ
+		ctx->EIP += d_ctx->disp_len +(int8_t)d_ctx->imm; // æœ‰ç¬¦å·åç§»
 		return true;
 	}
 	return false;
 }
 
 static void FPU_PUSH(CPU_Context* ctx, double val) {
-	ctx->FPU.SW.TOP = (ctx->FPU.SW.TOP - 1) & 0x7; // TOP »·ÈÆµİ¼õ
+	ctx->FPU.SW.TOP = (ctx->FPU.SW.TOP - 1) & 0x7; // TOP ç¯ç»•é€’å‡
 	ST(0) = val;
 }
 
 static double FPU_POP(CPU_Context* ctx) {
 	double val = ST(0);
-	ctx->FPU.SW.TOP = (ctx->FPU.SW.TOP + 1) & 0x7; // TOP »·ÈÆµİÔö
+	ctx->FPU.SW.TOP = (ctx->FPU.SW.TOP + 1) & 0x7; // TOP ç¯ç»•é€’å¢
 	return val;
 }
 
 static double MemReadF(uint32_t addr, int size) {
-	if (size == 4) {//floatÒ²¶Á³Édouble
+	if (size == 4) {//floatä¹Ÿè¯»æˆdouble
 		uint32_t raw =  MemRead(addr, 4);
 		return (double)(*(float*)&raw);
 	}
@@ -1817,17 +1847,17 @@ static void MemWriteF(uint32_t addr, double val, int size) {
 }
 
 static void UpdateFPUFlags(CPU_Context* ctx, double v1, double v2) {
-	// ÏÈÇå¿ÕÏà¹Ø±êÖ¾
+	// å…ˆæ¸…ç©ºç›¸å…³æ ‡å¿—
 	ctx->FPU.SW.C0 = 0;//CF
-	ctx->FPU.SW.C2 = 0;//·ÇPF- isNaN£¿
+	ctx->FPU.SW.C2 = 0;//éPF- isNaNï¼Ÿ
 	ctx->FPU.SW.C3 = 0;//ZF
 
-	if (isnan(v1) | isnan(v2)) {//ÊôÓÚ C ÓïÑÔµÄ±ê×¼ÊıÑ§¿â <math.h>µÄºê£¬ÅĞ¶ÏÊÇ·ñÎŞĞòNaN
+	if (isnan(v1) | isnan(v2)) {//å±äº C è¯­è¨€çš„æ ‡å‡†æ•°å­¦åº“ <math.h>çš„å®ï¼Œåˆ¤æ–­æ˜¯å¦æ— åºNaN
 		ctx->FPU.SW.C0 = 1;
 		ctx->FPU.SW.C2 = 1;
 		ctx->FPU.SW.C3 = 1;
 	} else if (v1 > v2) {
-		//È«0
+		//å…¨0
 	} else if (v1 = v2) {
 		ctx->FPU.SW.C3 = 1;
 	} else if (v1 < v2) {
@@ -1845,7 +1875,7 @@ static void Exec_SAHF(CPU_Context* ctx) {
 }
 
 static void Exec_LAHF(CPU_Context* ctx) {
-	// ³õÊ¼»¯Îª 0x02£¬È·±£±£ÁôÎ» Bit 1 Îª 1
+	// åˆå§‹åŒ–ä¸º 0x02ï¼Œç¡®ä¿ä¿ç•™ä½ Bit 1 ä¸º 1
 	uint8_t ah = 0x02;
 	ah |= (ctx->EFLAGS.SF & 1) << 7;
 	ah |= (ctx->EFLAGS.ZF & 1) << 6;
@@ -1855,19 +1885,19 @@ static void Exec_LAHF(CPU_Context* ctx) {
 	ctx->EAX.I8.H = ah;
 }
 
-// ¶ÁÈ¡ÕûÊıÄÚ´æ (int16/int32) -> double (´¦Àí DA/DB/DE/DF)
+// è¯»å–æ•´æ•°å†…å­˜ (int16/int32) -> double (å¤„ç† DA/DB/DE/DF)
 static double MemReadI(uint32_t addr, int size) {
 	uint32_t raw = MemRead(addr, size);
 	if (size == 2) {
-		return (double)(int16_t)raw;    // Ç¿×ª·ûºÅÀ©Õ¹
+		return (double)(int16_t)raw;    // å¼ºè½¬ç¬¦å·æ‰©å±•
 	} else { // size == 4
-		return (double)(int32_t)raw;    // Ç¿×ª·ûºÅÀ©Õ¹
+		return (double)(int32_t)raw;    // å¼ºè½¬ç¬¦å·æ‰©å±•
 	}
 }
 
-// Ğ´ÈëÕûÊıÄÚ´æ double -> (int16/int32) (´¦Àí DB/DF)
+// å†™å…¥æ•´æ•°å†…å­˜ double -> (int16/int32) (å¤„ç† DB/DF)
 static void MemWriteI(uint32_t addr, double val, int size) {
-	// ¼òµ¥½Ø¶ÏÈ¡Õû (CVTTSD2SI ĞĞÎª)
+	// ç®€å•æˆªæ–­å–æ•´ (CVTTSD2SI è¡Œä¸º)
 	if (size == 2) {
 		int16_t i16 = (int16_t)val;
 		MemWrite(addr, (uint16_t)i16, 2);
@@ -1882,24 +1912,24 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 	uint8_t sub_op = d_ctx->reg;
 	bool is_mem = d_ctx->mod != 3;
 	// ==================================================
-	// Â·¾¶ A: ÄÚ´æ²Ù×÷
+	// è·¯å¾„ A: å†…å­˜æ“ä½œ
 	// ==================================================
 	if (is_mem) {
 		uint32_t addr = GetEffectiveAddress(ctx, d_ctx);
 		// ------------------------------------------------
-		// Group 1: ËãÊõÔËËã (D8, DC, DA, DE)
-		// Âß¼­£ºST0 = ST0 op [MEM]
+		// Group 1: ç®—æœ¯è¿ç®— (D8, DC, DA, DE)
+		// é€»è¾‘ï¼šST0 = ST0 op [MEM]
         // ------------------------------------------------
 		if (op_group == 0xD8 || op_group == 0xDA || op_group == 0xDC || op_group == 0xDE) {
 			double src = 0.0;
-			// 1. ¸ù¾İÖ¸Áî×é¶ÁÈ¡²»Í¬ÀàĞÍµÄÔ´²Ù×÷Êı
+			// 1. æ ¹æ®æŒ‡ä»¤ç»„è¯»å–ä¸åŒç±»å‹çš„æºæ“ä½œæ•°
 			if (op_group == 0xD8) src = MemReadF(addr, 4); // float
 			else if (op_group == 0xDC) src = MemReadF(addr, 8); // double
 			else if (op_group == 0xDA) src = MemReadI(addr, 4); // int32 (FIADD...)
 			else if (op_group == 0xDE) src = MemReadI(addr, 2); // int16 (FIADD...)
 
-			double* dst = &ST(0);//Ö±½ÓÖ¸ÕëĞŞ¸ÄSTÖµ
-			// 2. Ö´ĞĞÍ³Ò»ËãÊõÂß¼­
+			double* dst = &ST(0);//ç›´æ¥æŒ‡é’ˆä¿®æ”¹STå€¼
+			// 2. æ‰§è¡Œç»Ÿä¸€ç®—æœ¯é€»è¾‘
 			switch (sub_op) {
 				case 0: *dst += src; break; // FADD / FIADD
 				case 1: *dst *= src; break; // FMUL / FIMUL
@@ -1912,17 +1942,17 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 			}
 		}
 		// ------------------------------------------------
-		// Group 2: Êı¾İ´«Êä (D9, DD, DB, DF)
-		// Âß¼­£ºLoad / Store
+		// Group 2: æ•°æ®ä¼ è¾“ (D9, DD, DB, DF)
+		// é€»è¾‘ï¼šLoad / Store
 		// ------------------------------------------------
 		else {
 			int size = 0;
 			bool is_int = false;
-			// È·¶¨»ù±¾ÀàĞÍºÍ´óĞ¡
+			// ç¡®å®šåŸºæœ¬ç±»å‹å’Œå¤§å°
 			if (op_group == 0xD9) { size = 4; }           // float
 			else if (op_group == 0xDD) { size = 8; }           // double
 			else if (op_group == 0xDB) { size = 4; is_int = true; } // int32
-			else if (op_group == 0xDF) { size = 2; is_int = true; } // int16 £¬ÏÈ¼ò»¯´¦ÀíÔÙ´¦ÀíÌØÊâÖµ£¬²»ÏëÉî»¯ÏÂÈ¥ÁË
+			else if (op_group == 0xDF) { size = 2; is_int = true; } // int16 ï¼Œå…ˆç®€åŒ–å¤„ç†å†å¤„ç†ç‰¹æ®Šå€¼ï¼Œä¸æƒ³æ·±åŒ–ä¸‹å»äº†
 
 			switch (sub_op) {
 				case 0: {// FLD / FILD (Load)
@@ -1940,15 +1970,15 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 					else        MemWriteF(addr, FPU_POP(ctx), size);
 					break;
 				}
-				case 5: {// ÌØÊâ: FILD m64 (DF /5) - ¼ÓÔØ 64Î»ÕûÊı
+				case 5: {// ç‰¹æ®Š: FILD m64 (DF /5) - åŠ è½½ 64ä½æ•´æ•°
 					if (op_group == 0xDF) {
 						uint32_t low = MemRead(addr, 4);
 						uint32_t high = MemRead(addr + 4, 4);
 						int64_t val64 = ((int64_t)high << 32) | low;
 						FPU_PUSH(ctx, (double)val64);
 					} else if (op_group == 0xD9) {
-						// D9 /5: FLDCW (Load Control Word) - ÊÊÅä CW
-						// Ö±½Ó¶ÁÈ¡ÄÚ´æµ½ Value ÁªºÏÌå³ÉÔ±
+						// D9 /5: FLDCW (Load Control uint16_t) - é€‚é… CW
+						// ç›´æ¥è¯»å–å†…å­˜åˆ° Value è”åˆä½“æˆå‘˜
 						ctx->FPU.CW.Value = (uint16_t)MemRead(addr, 2);
 					}
 					break;
@@ -1959,10 +1989,10 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 						MemWrite(addr, (uint32_t)(val64 & 0xFFFFFFFF), 4);
 						MemWrite(addr + 4, (uint32_t)(val64 >> 32), 4);
 					} else if (op_group == 0xD9) {
-						// D9 /7: FNSTCW (Store Control Word) - ÊÊÅä CW
+						// D9 /7: FNSTCW (Store Control uint16_t) - é€‚é… CW
 						MemWrite(addr, ctx->FPU.CW.Value, 2);
 					} else if (op_group == 0xDD) {
-						// DD /7: FSTSW (Store Status Word) - ÊÊÅä SW
+						// DD /7: FSTSW (Store Status uint16_t) - é€‚é… SW
 						MemWrite(addr, ctx->FPU.SW.Value, 2);
 					}
 					break;
@@ -1974,7 +2004,7 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 		}
 	} 
 	// ==================================================
-	// Â·¾¶ B: ¼Ä´æÆ÷²Ù×÷
+	// è·¯å¾„ B: å¯„å­˜å™¨æ“ä½œ
 	// ==================================================
 	else {
 		int i = d_ctx->rm; // ST(i)
@@ -2003,12 +2033,12 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 				case 7: ST(i) = ST(i) / ST(0); break;
 			}
 		}
-		// 3. DE: ST(i) = ST(i) op ST(0) È»ºó POP
+		// 3. DE: ST(i) = ST(i) op ST(0) ç„¶å POP
 		else if (op_group == 0xDE) {
 			switch (sub_op) {
 				case 0: ST(i) += ST(0); FPU_POP(ctx); break;
 				case 1: ST(i) *= ST(0); FPU_POP(ctx); break;
-				case 3: // DE D9: FCOMPP (ÌØÊâ: µ¯Õ»Á½´Î)
+				case 3: // DE D9: FCOMPP (ç‰¹æ®Š: å¼¹æ ˆä¸¤æ¬¡)
 					if (i == 1) {
 						UpdateFPUFlags(ctx, ST(0), ST(1));
 						FPU_POP(ctx); FPU_POP(ctx);
@@ -2020,14 +2050,14 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 				case 7: ST(i) = ST(i) / ST(0); FPU_POP(ctx); break;
 			}
 		}
-		// 4. DA: ÌØÊâÖ¸Áî
+		// 4. DA: ç‰¹æ®ŠæŒ‡ä»¤
 		else if (op_group == 0xDA) {
 			if (sub_op == 5 && i == 1) { // DA E9: FUCOMPP
 				UpdateFPUFlags(ctx, ST(0), ST(1));
 				FPU_POP(ctx); FPU_POP(ctx);
 			}
 		}
-		// 5. DB: ¿ØÖÆÖ¸Áî
+		// 5. DB: æ§åˆ¶æŒ‡ä»¤
 		else if (op_group == 0xDB) {
 			if (sub_op == 4) {
 				if (i == 2) { // FCLEX
@@ -2039,13 +2069,13 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 				}
 			}
 		}
-		// 6. DF: ×´Ì¬´æ´¢
+		// 6. DF: çŠ¶æ€å­˜å‚¨
 		else if (op_group == 0xDF && sub_op == 4 && i == 0) {
 			ctx->EAX.I16 = ctx->FPU.SW.Value;
 		}
-		// [ĞÂÔö] ´¦Àí 0xD9 ×éµÄ¼Ä´æÆ÷Ö¸Áî (FLD constants, FCHS, FABS µÈ)
+		// [æ–°å¢] å¤„ç† 0xD9 ç»„çš„å¯„å­˜å™¨æŒ‡ä»¤ (FLD constants, FCHS, FABS ç­‰)
 		else if (op_group == 0xD9) {
-			// sub_op ¶ÔÓ¦ ModRM.reg, i ¶ÔÓ¦ ModRM.rm
+			// sub_op å¯¹åº” ModRM.reg, i å¯¹åº” ModRM.rm
 			if (sub_op == 4) {
 				switch (i) {
 					case 0: ST(0) = -ST(0); break; // FCHS (Change Sign)
@@ -2054,7 +2084,7 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 						// case 5: FXAM ...
 				}
 			} else if (sub_op == 5) {
-				// ¼ÓÔØ³£Êı (Push Constant)
+				// åŠ è½½å¸¸æ•° (Push Constant)
 				switch (i) {
 					case 0: FPU_PUSH(ctx, 1.0); break; // FLD1
 					case 1: FPU_PUSH(ctx, log2(10.0)); break; // FLDL2T
@@ -2065,8 +2095,7 @@ static void Exec_FPU(CPU_Context* ctx, DecodeContext* d_ctx) {
 					case 6: FPU_PUSH(ctx, 0.0); break; // FLDZ
 				}
 			}
-			// sub_op 6/7 »¹ÓĞ F2XM1, FSQRT, FSIN µÈ£¬ÔİÊ±¿ÉÂÔ
+			// sub_op 6/7 è¿˜æœ‰ F2XM1, FSQRT, FSIN ç­‰ï¼Œæš‚æ—¶å¯ç•¥
 		}
 	}
 }
-

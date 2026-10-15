@@ -1,15 +1,11 @@
-#pragma once
+ï»¿#pragma once
 #include "TinyX86.h"
 #include <stdbool.h>
-
-// ÊÍ·ÅÄÚ´æ
+// é‡Šæ”¾å†…å­˜
 void UnloadExe(CPU_Context* ctx);
-
-// ¼ÓÔØ PE (×Ô¶¯½âÎö»ùÖ·ºÍÈë¿Ú)
+// åŠ è½½ PE (è‡ªåŠ¨è§£æåŸºå€å’Œå…¥å£)
 bool LoadExe(const char* filepath, CPU_Context* ctx);
-
-// ¼ÓÔØ Bin (Ö¸¶¨»ùÖ·£¬Èç 0x400000)
+// åŠ è½½ Bin (æŒ‡å®šåŸºå€ï¼Œå¦‚ 0x400000)
 bool LoadBin(const char* filepath, CPU_Context* ctx, uint32_t baseAddr);
-
-// ¼ÓÔØÄÚ´æÊı×é
+// åŠ è½½å†…å­˜æ•°ç»„
 bool LoadMem(const uint8_t* code, uint32_t size, CPU_Context* ctx, uint32_t baseAddr);

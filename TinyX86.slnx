@@ -1,7 +1,6 @@
 <Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="TinyX86.vcxproj" Id="8b075353-46ab-4a14-a54d-22ad4ecc7e3b" />
+  <Configurations><Platform Name="x86" /></Configurations>
+  <Project Path="TinyX86.vcxproj" />
+  <Project Path="deps/Core-x86-Disassembler/CoreX86.vcxproj" />
+  <Project Path="deps/PETools/PETools.vcxproj" />
 </Solution>

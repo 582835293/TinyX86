@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+ï»¿#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -6,13 +6,14 @@
 #include "TinyX86.h"
 #include "PELoader.h"
 #include "debugger.h"
-#include <psapi.h> // WhoIsThere²âÊÔº¯ÊıĞèÒª
+#include <windows.h>
+#include <psapi.h> // WhoIsThereæµ‹è¯•å‡½æ•°éœ€è¦
 #pragma comment(lib, "psapi.lib")
 
 // =============================================================
-// ÄÚÖÃÄ¬ÈÏ²âÊÔ»úÆ÷Âë
+// å†…ç½®é»˜è®¤æµ‹è¯•æœºå™¨ç 
 // =============================================================
-// C´úÂë²Î¿¼:
+// Cä»£ç å‚è€ƒ:
 // double power(double base, int exp) {
 //     if (exp <= 0) return 1.0;
 //     return base * power(base, exp - 1);
@@ -25,48 +26,48 @@ static const uint8_t g_TestCode[] = {
         0xE8, 0x06, 0x00, 0x00, 0x00,       // 0x09 | call +6 (End:0x0E + 6 = 0x14)
         0x83, 0xC4, 0x0C,                   // 0x0E | add esp, 12
         0xCC,                               // 0x11 | int3
-        0x90, 0x90,                         // 0x12 | nop (¶ÔÆë£¬È·±£º¯Êı´Ó 0x14 ¿ªÊ¼)
+        0x90, 0x90,                         // 0x12 | nop (å¯¹é½ï¼Œç¡®ä¿å‡½æ•°ä» 0x14 å¼€å§‹)
 
         // --- [0x14] POWER FUNCTION START ---
         0x55,                               // 0x14 | push ebp
         0x8B, 0xEC,                         // 0x15 | mov ebp, esp
         0x83, 0xEC, 0x40,                   // 0x17 | sub esp, 0x40
 
-        // 1. ÏÈÌî³äÔàÊı¾İ (ÕâÊ±Õ»¶¥»¹ÊÇ esp-0x40)
+        // 1. å…ˆå¡«å……è„æ•°æ® (è¿™æ—¶æ ˆé¡¶è¿˜æ˜¯ esp-0x40)
         0x8D, 0x7D, 0xC0,                   // 0x1A | lea edi, [ebp-40h]
         0xB9, 0x10, 0x00, 0x00, 0x00,       // 0x1D | mov ecx, 10h
         0xB8, 0xCC, 0xCC, 0xCC, 0xCC,       // 0x22 | mov eax, 0xCCCCCCCC
         0xF3, 0xAB,                         // 0x27 | rep stos dword ptr [edi]
 
-        // 2. ÔÙÑ¹Èë±£»¤¼Ä´æÆ÷ (ĞŞÕıºóÕâÀïµØÖ·Ë³ÑÓ)
+        // 2. å†å‹å…¥ä¿æŠ¤å¯„å­˜å™¨ (ä¿®æ­£åè¿™é‡Œåœ°å€é¡ºå»¶)
         0x53,                               // 0x29 | push ebx
         0x56,                               // 0x2A | push esi
         0x57,                               // 0x2B | push edi
 
-        // --- ÒµÎñÂß¼­ ---
+        // --- ä¸šåŠ¡é€»è¾‘ ---
         // 
         0x83, 0x7D, 0x10, 0x00,             // 0x2C | cmp dword ptr [ebp+16], 0
 
-        // JG Ìø×ªÄ¿±êÊÇ 0x36 (mov eax...)
-        // µ±Ç°Ö¸Áî½áÊøÓÚ 0x32¡£Offset = Target(0x36) - End(0x32) = 0x04
-        0x7F, 0x04,                         // 0x30 | jg +4 (Ìøµ½ 0x36)
+        // JG è·³è½¬ç›®æ ‡æ˜¯ 0x36 (mov eax...)
+        // å½“å‰æŒ‡ä»¤ç»“æŸäº 0x32ã€‚Offset = Target(0x36) - End(0x32) = 0x04
+        0x7F, 0x04,                         // 0x30 | jg +4 (è·³åˆ° 0x36)
 
         // --- Base Case ---
         0xD9, 0xE8,                         // 0x32 | fld1
-        //JMP Ìø×ªÄ¿±êÊÇ 0x4C (º¯ÊıÊÕÎ²)
-        // µ±Ç°Ö¸Áî½áÊøÓÚ 0x36¡£Offset = Target(0x4C) - End(0x36) = 0x16 (22)
-        0xEB, 0x16,                         // 0x34 | jmp +22 (Ìøµ½ 0x4C)
+        //JMP è·³è½¬ç›®æ ‡æ˜¯ 0x4C (å‡½æ•°æ”¶å°¾)
+        // å½“å‰æŒ‡ä»¤ç»“æŸäº 0x36ã€‚Offset = Target(0x4C) - End(0x36) = 0x16 (22)
+        0xEB, 0x16,                         // 0x34 | jmp +22 (è·³åˆ° 0x4C)
 
-        // --- Recursive Step (µØÖ· 0x36) ---
+        // --- Recursive Step (åœ°å€ 0x36) ---
         0x8B, 0x45, 0x10,                   // 0x36 | mov eax, [ebp+16]
         0x48,                               // 0x39 | dec eax
         0x50,                               // 0x3A | push eax
         0xFF, 0x75, 0x0C,                   // 0x3B | push dword ptr [ebp+12]
         0xFF, 0x75, 0x08,                   // 0x3E | push dword ptr [ebp+8]
 
-        // CALL Ìø×ªÄ¿±êÊÇ 0x14 (º¯Êı¿ªÍ·)
-        // µ±Ç°Ö¸Áî½áÊøÓÚ 0x46¡£Offset = Target(0x14) - End(0x46) = -50 (0xFFFFFFCE)
-        0xE8, 0xCE, 0xFF, 0xFF, 0xFF,       // 0x41 | call -50 (Ìø»Ø 0x14)
+        // CALL è·³è½¬ç›®æ ‡æ˜¯ 0x14 (å‡½æ•°å¼€å¤´)
+        // å½“å‰æŒ‡ä»¤ç»“æŸäº 0x46ã€‚Offset = Target(0x14) - End(0x46) = -50 (0xFFFFFFCE)
+        0xE8, 0xCE, 0xFF, 0xFF, 0xFF,       // 0x41 | call -50 (è·³å› 0x14)
 
         0x83, 0xC4, 0x0C,                   // 0x46 | add esp, 12
         0xDC, 0x4D, 0x08,                   // 0x49 | fmul qword ptr [ebp+8]
@@ -82,7 +83,7 @@ static const uint8_t g_TestCode[] = {
 
 
 
-void WhoIsThere(void* addr) {//²éÄÚ´æÕ¼Î»µÄÊÇË­£¬µ÷ÊÔÓÃ
+void WhoIsThere(void* addr) {//æŸ¥å†…å­˜å ä½çš„æ˜¯è°ï¼Œè°ƒè¯•ç”¨
     MEMORY_BASIC_INFORMATION mbi;
     if (VirtualQuery(addr, &mbi, sizeof(mbi)) == 0) {
         printf("[Detective] VirtualQuery failed. Address is totally invalid.\n");
@@ -91,37 +92,37 @@ void WhoIsThere(void* addr) {//²éÄÚ´æÕ¼Î»µÄÊÇË­£¬µ÷ÊÔÓÃ
 
     printf("\n[Detective] Investigating address 0x%08X...\n", (uint32_t)addr);
 
-    // 1. ¿´¿´ËüÊÇ¿ÕÏĞµÄ»¹ÊÇ±»Õ¼ÓÃµÄ
+    // 1. çœ‹çœ‹å®ƒæ˜¯ç©ºé—²çš„è¿˜æ˜¯è¢«å ç”¨çš„
     if (mbi.State == MEM_FREE) {
-        printf("  -> Status: MEM_FREE (¿ÕÏĞ! VirtualAlloc Ó¦¸Ã³É¹¦µÄ!)\n");
+        printf("  -> Status: MEM_FREE (ç©ºé—²! VirtualAlloc åº”è¯¥æˆåŠŸçš„!)\n");
         return;
     }
 
-    // 2. Èç¹û±»Õ¼ÓÃ£¬ÊÇ±»Ê²Ã´Õ¼ÓÃµÄ£¿
-    printf("  -> Status: COMMITTED/RESERVED (±»Õ¼ÓÃ)\n");
-    printf("  -> AllocationBase: 0x%08X (Õâ¿éÄÚ´æµÄÆğÊ¼Î»ÖÃ)\n", (uint32_t)mbi.AllocationBase);
+    // 2. å¦‚æœè¢«å ç”¨ï¼Œæ˜¯è¢«ä»€ä¹ˆå ç”¨çš„ï¼Ÿ
+    printf("  -> Status: COMMITTED/RESERVED (è¢«å ç”¨)\n");
+    printf("  -> AllocationBase: 0x%08X (è¿™å—å†…å­˜çš„èµ·å§‹ä½ç½®)\n", (uint32_t)mbi.AllocationBase);
 
-    // 3. ËüÊÇË­£¿
+    // 3. å®ƒæ˜¯è°ï¼Ÿ
     if (mbi.Type == MEM_IMAGE) {
-        printf("  -> Type: MEM_IMAGE (ÊÇ DLL »ò EXE ¾µÏñ)\n");
+        printf("  -> Type: MEM_IMAGE (æ˜¯ DLL æˆ– EXE é•œåƒ)\n");
         char modName[MAX_PATH];
         if (GetMappedFileNameA(GetCurrentProcess(), mbi.AllocationBase, modName, MAX_PATH)) {
-            printf("  -> OWNER: %s \n", modName); // ×¥×¡ÄãÁË£¡´òÓ¡ÎÄ¼şÃû
+            printf("  -> OWNER: %s \n", modName); // æŠ“ä½ä½ äº†ï¼æ‰“å°æ–‡ä»¶å
         } else {
             printf("  -> OWNER: Unknown Image\n");
         }
     } else if (mbi.Type == MEM_PRIVATE) {
-        printf("  -> Type: MEM_PRIVATE (Í¨³£ÊÇ ¶Ñ(Heap) »ò Õ»(Stack))\n");
-        printf("     (¿ÉÄÜÊÇ malloc ·ÖÅäµÄÄÚ´æ£¬»òÕßÊÇÖ÷Ïß³ÌµÄ Stack)\n");
+        printf("  -> Type: MEM_PRIVATE (é€šå¸¸æ˜¯ å †(Heap) æˆ– æ ˆ(Stack))\n");
+        printf("     (å¯èƒ½æ˜¯ malloc åˆ†é…çš„å†…å­˜ï¼Œæˆ–è€…æ˜¯ä¸»çº¿ç¨‹çš„ Stack)\n");
     } else if (mbi.Type == MEM_MAPPED) {
-        printf("  -> Type: MEM_MAPPED (ÎÄ¼şÓ³Éä)\n");
+        printf("  -> Type: MEM_MAPPED (æ–‡ä»¶æ˜ å°„)\n");
     }
     printf("==========================================\n\n");
 }
 
-// ÔÚ main º¯ÊıµÚÒ»ĞĞµ÷ÓÃËü£º
+// åœ¨ main å‡½æ•°ç¬¬ä¸€è¡Œè°ƒç”¨å®ƒï¼š
 // WhoIsThere((void*)0x00400000);
-// ================= ÕìÌ½´úÂë½áÊø =================
+// ================= ä¾¦æ¢ä»£ç ç»“æŸ =================
 
 void PrintMenu() {
     printf("\n");
@@ -136,7 +137,7 @@ void PrintMenu() {
 
 int main() {
     //WhoIsThere((void*)0x00400000);
-    // ================= ÕìÌ½´úÂë½áÊø =======
+    // ================= ä¾¦æ¢ä»£ç ç»“æŸ =======
     CPU_Context cpu;
     char inputBuffer[256];
     char* cmd;
@@ -150,21 +151,21 @@ int main() {
 
         if (!fgets(inputBuffer, sizeof(inputBuffer), stdin)) break;
 
-        // È¥³ı»»ĞĞ·û
+        // å»é™¤æ¢è¡Œç¬¦
         inputBuffer[strcspn(inputBuffer, "\n")] = 0;
 
-        // ½âÎöÃüÁî
+        // è§£æå‘½ä»¤
         cmd = strtok(inputBuffer, " ");
         if (!cmd) continue;
 
-        // »ñÈ¡²ÎÊı (¿ÉÄÜÎª¿Õ)
+        // è·å–å‚æ•° (å¯èƒ½ä¸ºç©º)
         arg = strtok(NULL, "");
 
-        // Í³Ò»×ªĞ¡Ğ´Ö»È¡Ê××ÖÄ¸
+        // ç»Ÿä¸€è½¬å°å†™åªå–é¦–å­—æ¯
         char op = tolower(cmd[0]);
         bool loaded = false;
 
-        // --- ¼«ËÙÃüÁîÆ¥Åä ---
+        // --- æé€Ÿå‘½ä»¤åŒ¹é… ---
         switch (op) {
             case 'q': // Quit
                 printf("Bye.\n");
@@ -181,7 +182,7 @@ int main() {
 
             case 'e': // Exe
                 if (arg) {
-                    // È¥³ıÒıºÅ (Ö§³ÖÍÏ×§ÎÄ¼şÂ·¾¶)
+                    // å»é™¤å¼•å· (æ”¯æŒæ‹–æ‹½æ–‡ä»¶è·¯å¾„)
                     if (arg[0] == '\"') { arg++; arg[strlen(arg) - 1] = 0; }
                     printf("[Shell] Loading PE: %s\n", arg);
                     loaded = LoadExe(arg, &cpu);
@@ -205,12 +206,12 @@ int main() {
                 break;
         }
 
-        // --- ½øÈëµ÷ÊÔÆ÷ ---
+        // --- è¿›å…¥è°ƒè¯•å™¨ ---
         if (!loaded) {
-            // Èç¹ûÃ»¼ÓÔØ³É¹¦£¬¸æËßÊÇ²»ÊÇÎÄ¼şÃ»ÕÒµ½»òÕß¸ñÊ½²»¶Ô
+            // å¦‚æœæ²¡åŠ è½½æˆåŠŸï¼Œå‘Šè¯‰æ˜¯ä¸æ˜¯æ–‡ä»¶æ²¡æ‰¾åˆ°æˆ–è€…æ ¼å¼ä¸å¯¹
             printf("[Error] Load operation failed! Check file path or PE format (Must be 32-bit).\n");
         } else {
-            // --- ½øÈëµ÷ÊÔÆ÷ ---
+            // --- è¿›å…¥è°ƒè¯•å™¨ ---
             printf("----------------------------------\n");
             Debugger(&cpu);
             UnloadExe(&cpu);

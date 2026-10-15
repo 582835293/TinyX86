@@ -1,117 +1,99 @@
-#define _CRT_SECURE_NO_WARNINGS
+Ôªø#define _CRT_SECURE_NO_WARNINGS
 #include "PELoader.h"
-#include "PETools.h" // ∏¥”√ƒ„œ÷”–µƒπ§æﬂ
+#include "PETools.h" // Â§çÁî®‰Ω†Áé∞ÊúâÁöÑÂ∑•ÂÖ∑
 #include <stdio.h>
 #include <windows.h> // VirtualAlloc
-
-// »´æ÷º«¬º£¨”√”⁄ Õ∑≈
+// ÂÖ®Â±ÄËÆ∞ÂΩïÔºåÁî®‰∫éÈáäÊîæ
 static void* g_CodeMemory = NULL;
- void* g_StackMemory = NULL;//»´æ÷±‰¡ø£¨¥´µ›∑÷≈‰µƒ’ªµÿ÷∑
-
+ void* g_StackMemory = NULL;//ÂÖ®Â±ÄÂèòÈáèÔºå‰º†ÈÄíÂàÜÈÖçÁöÑÊ†àÂú∞ÂùÄ
 // ---------------------------------------------------------
-// Õ®”√ CPU ≥ı ºªØ (…Ë÷√ EIP, ESP, ∂Œºƒ¥Ê∆˜)
+// ÈÄöÁî® CPU ÂàùÂßãÂåñ (ËÆæÁΩÆ EIP, ESP, ÊÆµÂØÑÂ≠òÂô®)
 // ---------------------------------------------------------
 static bool InitCpuCommon(CPU_Context* ctx, uint32_t entryPoint, uint32_t stackSize) {
-    if (stackSize == 0) stackSize = 1024 * 64; // ƒ¨»œ 64KB
-
-    // 1. ∑÷≈‰∂—’ª
+    if (stackSize == 0) stackSize = 1024 * 64; // ÈªòËÆ§ 64KB
+    // 1. ÂàÜÈÖçÂ†ÜÊ†à
     g_StackMemory = VirtualAlloc(NULL, stackSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (!g_StackMemory) {
         printf("[Loader] Failed to allocate stack.\n");
         return false;
     }
-
-    // 2. «Â¡„…œœ¬Œƒ
+    // 2. Ê∏ÖÈõ∂‰∏ä‰∏ãÊñá
     memset(ctx, 0, sizeof(CPU_Context));
-
-    // 3. …Ë÷√ºƒ¥Ê∆˜
+    // 3. ËÆæÁΩÆÂØÑÂ≠òÂô®
     ctx->EIP = entryPoint;
-    ctx->ESP.I32 = (uint32_t)g_StackMemory + stackSize - 0x20; // ’ªµ◊
+    ctx->ESP.I32 = (uint32_t)g_StackMemory + stackSize - 0x20; // Ê†àÂ∫ï
     ctx->EBP.I32 = ctx->ESP.I32;
-
-    // ºÚµ•…Ë÷√∂Œºƒ¥Ê∆˜ (Flat Model)
+    // ÁÆÄÂçïËÆæÁΩÆÊÆµÂØÑÂ≠òÂô® (Flat Model)
     ctx->CS = 0x1B; ctx->DS = 0x23; ctx->ES = 0x23; ctx->SS = 0x23;
     return true;
 }
-
 // ---------------------------------------------------------
-// LoadExe: ¿˚”√ PETools Ω‚Œˆ≤¢”≥…‰
+// LoadExe: Âà©Áî® PETools Ëß£ÊûêÂπ∂Êò†Â∞Ñ
 // ---------------------------------------------------------
 // ==========================================================
-// –ﬁ∏ƒ∫Ûµƒ LoadExe (¥¯œÍœ∏’Ô∂œ)
+// ‰øÆÊîπÂêéÁöÑ LoadExe (Â∏¶ËØ¶ÁªÜËØäÊñ≠)
 // ==========================================================
 bool LoadExe(const char* filepath, CPU_Context* ctx) {
     LPVOID pFileBuffer = NULL;
     DWORD fileSize = 0;
     // ==========================================================
-    // °æ–¬‘ˆ–ﬁ∏¥°ø ∑¿÷π ReadPEFile ŒÛ«¿ 0x400000
+    // „ÄêÊñ∞Â¢û‰øÆÂ§ç„Äë Èò≤Ê≠¢ ReadPEFile ËØØÊä¢ 0x400000
     // ==========================================================
-    // œ»‘⁄ 0x400000 ’º∏ˆø” (MEM_RESERVE)£¨ÀÊ±„’º∂‡¥Û (±»»Á 1MB)
-    // ’‚—˘ ReadPEFile ∑÷≈‰ƒ⁄¥Ê ±£¨æÕ±ª∆»»•±µƒµÿ∑Ω£¨≤ªª·≈ˆ’‚¿Ô°£
+    // ÂÖàÂú® 0x400000 Âç†‰∏™Âùë (MEM_RESERVE)ÔºåÈöè‰æøÂç†Â§öÂ§ß (ÊØîÂ¶Ç 1MB)
+    // ËøôÊ†∑ ReadPEFile ÂàÜÈÖçÂÜÖÂ≠òÊó∂ÔºåÂ∞±Ë¢´Ëø´ÂéªÂà´ÁöÑÂú∞ÊñπÔºå‰∏ç‰ºöÁ¢∞ËøôÈáå„ÄÇ
     // ==========================================================
     void* pPlaceholder = VirtualAlloc((LPVOID)0x00400000, 0x100000, MEM_RESERVE, PAGE_NOACCESS);
     if (!pPlaceholder) {
         printf("[Loader Warning] Could not reserve placeholder at 0x400000. Proceeding anyway...\n");
     }
-
-    // --- 1. œ÷‘⁄ø…“‘∑≈–ƒ∂¡»°Œƒº˛¡À ---
-    // pFileBuffer æ¯∂‘≤ªª·∑÷≈‰‘⁄ 0x400000£¨“ÚŒ™ƒ«¿Ô±ªŒ“√«’º¡À
-    // --- 1. Ω‚æˆ◊÷∑˚ºØŒ Ã‚ ---
-    // Œ“√«µƒ ‰»Î filepath  « char* (ANSI)£¨µ´ PETools ø…ƒ‹œÎ“™ TCHAR (Unicode)
+    // --- 1. Áé∞Âú®ÂèØ‰ª•ÊîæÂøÉËØªÂèñÊñá‰ª∂‰∫Ü ---
+    // pFileBuffer ÁªùÂØπ‰∏ç‰ºöÂàÜÈÖçÂú® 0x400000ÔºåÂõ†‰∏∫ÈÇ£ÈáåË¢´Êàë‰ª¨Âç†‰∫Ü
+    // --- 1. Ëß£ÂÜ≥Â≠óÁ¨¶ÈõÜÈóÆÈ¢ò ---
+    // Êàë‰ª¨ÁöÑËæìÂÖ• filepath ÊòØ char* (ANSI)Ôºå‰ΩÜ PETools ÂèØËÉΩÊÉ≥Ë¶Å TCHAR (Unicode)
 #ifdef UNICODE
     WCHAR wPath[MAX_PATH];
     MultiByteToWideChar(CP_ACP, 0, filepath, -1, wPath, MAX_PATH);
-    fileSize = ReadPEFile(wPath, &pFileBuffer); // ¥´øÌ◊÷∑˚
+    fileSize = ReadPEFile(wPath, &pFileBuffer); // ‰º†ÂÆΩÂ≠óÁ¨¶
 #else
-    fileSize = ReadPEFile(filepath, &pFileBuffer); // ¥´ ANSI
+    fileSize = ReadPEFile(filepath, &pFileBuffer); // ‰º† ANSI
 #endif
     // ==========================================================
-    // °æ–¬‘ˆ–ﬁ∏¥°ø ∂¡ÕÍŒƒº˛¡À£¨∞—ø”»√≥ˆ¿¥
+    // „ÄêÊñ∞Â¢û‰øÆÂ§ç„Äë ËØªÂÆåÊñá‰ª∂‰∫ÜÔºåÊääÂùëËÆ©Âá∫Êù•
     // ==========================================================
     if (pPlaceholder) {
         VirtualFree(pPlaceholder, 0, MEM_RELEASE);
     }
-
     if (!pFileBuffer || fileSize == 0) {
-        // ReadPEFile ƒ⁄≤øÕ®≥£ª·¥Ú”°¥ÌŒÛ£¨»Áπ˚À¸√ª¥Ú£¨Œ“√«≤π“ªæ‰
+        // ReadPEFile ÂÜÖÈÉ®ÈÄöÂ∏∏‰ºöÊâìÂç∞ÈîôËØØÔºåÂ¶ÇÊûúÂÆÉÊ≤°ÊâìÔºåÊàë‰ª¨Ë°•‰∏ÄÂè•
         printf("[Loader Critical] ReadPEFile failed. Is the path correct?\n");
         printf("                Path seen: %s\n", filepath);
         return false;
     }
-
-    // --- 2. Ω‚Œˆ PE Õ∑ ---
+    // --- 2. Ëß£Êûê PE Â§¥ ---
     PEHeaderInfo info = { 0 };
     ParsePEHeaders(pFileBuffer, &info);
-
     printf("[Loader Info] Target ImageBase: 0x%08X\n", info.dwImageBase);
-
-    // --- 3. …Í«Îƒ⁄¥Ê (πÿº¸π ’œµ„) ---
-    // ≥¢ ‘‘⁄ƒø±Í ImageBase ¥¶«ø÷∆∑÷≈‰
+    // --- 3. Áî≥ËØ∑ÂÜÖÂ≠ò (ÂÖ≥ÈîÆÊïÖÈöúÁÇπ) ---
+    // Â∞ùËØïÂú®ÁõÆÊ†á ImageBase Â§ÑÂº∫Âà∂ÂàÜÈÖç
     g_CodeMemory = VirtualAlloc((LPVOID)info.dwImageBase, info.dwSizeOfImage,
         MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
     if (!g_CodeMemory) {
         DWORD err = GetLastError();
         printf("[Loader Critical] VirtualAlloc failed at 0x%08X! Error Code: %d\n", info.dwImageBase, err);
-
-        if (err == 487) { // 487 = ERROR_INVALID_ADDRESS (Õ®≥£“‚Œ∂◊≈µÿ÷∑±ª’º”√¡À)
+        if (err == 487) { // 487 = ERROR_INVALID_ADDRESS (ÈÄöÂ∏∏ÊÑèÂë≥ÁùÄÂú∞ÂùÄË¢´Âç†Áî®‰∫Ü)
             printf("    [Analysis] Memory conflict! The host emulator (TinyX86) or system \n");
             printf("               is already using address 0x%08X.\n", info.dwImageBase);
             printf("    [Fix] You need to enable ASLR for TinyX86 or support Relocations.\n");
         }
-
         free(pFileBuffer);
         return false;
     }
-
-    // ... (∫Û–¯¥˙¬Î£∫«Â¡„°¢∏¥÷∆ Header°¢∏¥÷∆ Section ±£≥÷≤ª±‰) ...
+    // ... (ÂêéÁª≠‰ª£Á†ÅÔºöÊ∏ÖÈõ∂„ÄÅÂ§çÂà∂ Header„ÄÅÂ§çÂà∂ Section ‰øùÊåÅ‰∏çÂèò) ...
     memset(g_CodeMemory, 0, info.dwSizeOfImage);
     memcpy(g_CodeMemory, pFileBuffer, info.dwSizeOfHeaders);
-
     PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)pFileBuffer;
     PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((DWORD)pFileBuffer + pDos->e_lfanew);
     PIMAGE_SECTION_HEADER pSec = IMAGE_FIRST_SECTION(pNt);
-
     for (int i = 0; i < info.wNumberOfSections; i++) {
         if (pSec[i].SizeOfRawData > 0) {
             void* dest = (void*)((DWORD)g_CodeMemory + pSec[i].VirtualAddress);
@@ -119,57 +101,42 @@ bool LoadExe(const char* filepath, CPU_Context* ctx) {
             memcpy(dest, src, pSec[i].SizeOfRawData);
         }
     }
-
     free(pFileBuffer);
-
-    // ≥ı ºªØ CPU
+    // ÂàùÂßãÂåñ CPU
     printf("[Loader Success] Loaded at 0x%08X. Entry: 0x%08X\n", (uint32_t)g_CodeMemory, info.dwEntryPoint);
     return InitCpuCommon(ctx, (uint32_t)g_CodeMemory + info.dwEntryPoint, 0);
 }
-
 // ---------------------------------------------------------
-// LoadBin: º”‘ÿ∂˛Ω¯÷∆Œƒº˛
+// LoadBin: Âä†ËΩΩ‰∫åËøõÂà∂Êñá‰ª∂
 // ---------------------------------------------------------
 bool LoadBin(const char* filepath, CPU_Context* ctx, uint32_t baseAddr) {
     FILE* f = fopen(filepath, "rb");
     if (!f) { printf("[Loader] Cannot open file: %s\n", filepath); return false; }
-
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     rewind(f);
-
     if (baseAddr == 0) baseAddr = 0x00400000;
-
     g_CodeMemory = VirtualAlloc((LPVOID)baseAddr, size + 0x1000,
         MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
     if (!g_CodeMemory) g_CodeMemory = VirtualAlloc(NULL, size + 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
     if (!g_CodeMemory) { fclose(f); return false; }
-
     fread(g_CodeMemory, 1, size, f);
     fclose(f);
-
     printf("[Loader] Binary loaded at 0x%08X\n", (uint32_t)g_CodeMemory);
     return InitCpuCommon(ctx, (uint32_t)g_CodeMemory, 0);
 }
-
 // ---------------------------------------------------------
-// LoadMem: º”‘ÿƒ⁄¥Ê ˝◊È (ƒ⁄÷√≤‚ ‘)
+// LoadMem: Âä†ËΩΩÂÜÖÂ≠òÊï∞ÁªÑ (ÂÜÖÁΩÆÊµãËØï)
 // ---------------------------------------------------------
 bool LoadMem(const uint8_t* code, uint32_t size, CPU_Context* ctx, uint32_t baseAddr) {
     if (baseAddr == 0) baseAddr = 0x00400000;
-
     g_CodeMemory = VirtualAlloc((LPVOID)baseAddr, size + 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
     if (!g_CodeMemory) g_CodeMemory = VirtualAlloc(NULL, size + 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
     if (!g_CodeMemory) return false;
-
     memcpy(g_CodeMemory, code, size);
     printf("[Loader] Test code mapped at 0x%08X\n", (uint32_t)g_CodeMemory);
-
     return InitCpuCommon(ctx, (uint32_t)g_CodeMemory, 0);
 }
-
 void UnloadExe(CPU_Context* ctx) {
     if (g_CodeMemory) { VirtualFree(g_CodeMemory, 0, MEM_RELEASE); g_CodeMemory = NULL; }
     if (g_StackMemory) { VirtualFree(g_StackMemory, 0, MEM_RELEASE); g_StackMemory = NULL; }

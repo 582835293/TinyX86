@@ -1,29 +1,25 @@
-#define _CRT_SECURE_NO_WARNINGS
+ï»¿#define _CRT_SECURE_NO_WARNINGS
 #include "debugger.h"
 #include "TinyX86.h"
 #include <stdio.h>
 #include <string.h> 
 #include <ctype.h>
 #include <stdlib.h> 
-
 extern void* g_StackMemory;
-
 // ============================================================================
-// ÄÚ²¿×´Ì¬ÓëÅäÖÃ
+// å†…éƒ¨çŠ¶æ€ä¸é…ç½®
 // ============================================================================
 #define MAX_BREAKPOINTS 16
 static uint32_t g_Breakpoints[MAX_BREAKPOINTS];
 static int g_BpCount = 0;
-
 // ============================================================================
-// ÄÚ²¿¸¨Öúº¯ÊıÉùÃ÷
+// å†…éƒ¨è¾…åŠ©å‡½æ•°å£°æ˜
 // ============================================================================
 static void ToUpperStr(char* str);
 static bool IsBreakpoint(uint32_t eip);
 static bool IsSoftwareBreakpoint(uint32_t eip);
 static bool IsStepOverCandidate(DecodeContext* d_ctx);
-
-// ÃüÁî´¦Àíº¯Êı (Handlers)
+// å‘½ä»¤å¤„ç†å‡½æ•° (Handlers)
 static void Cmd_StepInto(CPU_Context* ctx, const char* args);
 static void Cmd_StepOver(CPU_Context* ctx, DecodeContext* d_ctx);
 static void Cmd_Continue(CPU_Context* ctx);
@@ -38,43 +34,34 @@ static void Cmd_MemWriteVal(const char* args, int byte_width);
 static void Cmd_RegWrite(CPU_Context* ctx, const char* args);
 static void Cmd_StackDump(CPU_Context* ctx, const char* args);
 static void PrintHelp();
-
 // ============================================================================
-// Ö÷Ñ­»·Âß¼­
+// ä¸»å¾ªç¯é€»è¾‘
 // ============================================================================
-
 void Debugger(CPU_Context* ctx) {
     char input[128];
     DecodeContext d_ctx;
-
     printf("\n=== TinyX86 Debugger Initialized ===\n");
     printf("Type 'h' for help.\n");
-
     while (!ctx->Halted) {
-        // 1. ¼ì²éÊÇ·ñ¸Õ¸ÕÃüÖĞ¶Ïµã
+        // 1. æ£€æŸ¥æ˜¯å¦åˆšåˆšå‘½ä¸­æ–­ç‚¹
         if (IsBreakpoint(ctx->EIP)) {
             printf("\n[Debugger] Hit Breakpoint at 0x%08X\n", ctx->EIP);
         }
-
-        // 2. Ô¤½âÎöµ±Ç°Ö¸Áî (ÓÃÓÚÏÔÊ¾ºÍÂß¼­ÅĞ¶Ï)
+        // 2. é¢„è§£æå½“å‰æŒ‡ä»¤ (ç”¨äºæ˜¾ç¤ºå’Œé€»è¾‘åˆ¤æ–­)
         ParseInstuction((uint8_t*)ctx->EIP, ctx->EIP, &d_ctx);
         FormatInstruction((uint8_t*)ctx->EIP, &d_ctx);
-
-        // 3. ÏÔÊ¾ Prompt
+        // 3. æ˜¾ç¤º Prompt
         printf("\n(0x%08X)  %-30s  ; Next\n", ctx->EIP, d_ctx.asm_str);
         printf("(dbg) > ");
-
-        // 4. ¶ÁÈ¡ÊäÈë
+        // 4. è¯»å–è¾“å…¥
         if (!fgets(input, sizeof(input), stdin)) break;
-        input[strcspn(input, "\n")] = 0; // È¥³ı»»ĞĞ
+        input[strcspn(input, "\n")] = 0; // å»é™¤æ¢è¡Œ
         if (strlen(input) == 0) continue;
-
-        // 5. ½âÎöÃüÁîÓë²ÎÊı
+        // 5. è§£æå‘½ä»¤ä¸å‚æ•°
         char cmd = tolower(input[0]);
         char* args = input + 1;
-        while (*args == ' ') args++; // Ìø¹ıÃüÁîºóµÄ¿Õ¸ñ,ÊÇ×ÓÃüÁîÔòÖ¸ÏòµÚ¶ş¸ö×Ö·û
-
-        // 6. ÃüÁî·Ö·¢ (Dispatcher)
+        while (*args == ' ') args++; // è·³è¿‡å‘½ä»¤åçš„ç©ºæ ¼,æ˜¯å­å‘½ä»¤åˆ™æŒ‡å‘ç¬¬äºŒä¸ªå­—ç¬¦
+        // 6. å‘½ä»¤åˆ†å‘ (Dispatcher)
         switch (cmd) {
             case 's': // Step Into
                 Cmd_StepInto(ctx, args);
@@ -105,7 +92,7 @@ void Debugger(CPU_Context* ctx) {
             case 'e': // Edit Memory
                 if (strncmp(args, "d", 1) == 0) Cmd_MemWriteVal(args + 1, 4);      // ed <addr> <val>
                 else if (strncmp(args, "w", 1) == 0) Cmd_MemWriteVal(args + 1, 2); // ew <addr> <val>
-                else Cmd_MemEdit(args); // Ô­ÓĞµÄ×Ö½ÚÁ÷Ğ´Èë e <addr> <b1> <b2>...
+                else Cmd_MemEdit(args); // åŸæœ‰çš„å­—èŠ‚æµå†™å…¥ e <addr> <b1> <b2>...
                 break;
             case 'w': // Write Register
                 Cmd_RegWrite(ctx, args);
@@ -121,21 +108,18 @@ void Debugger(CPU_Context* ctx) {
                 printf("Unknown command '%c'. Type 'h' for help.\n", cmd);
                 break;
         }
-
         if (cmd == 'q') break;
     }
     printf("Debugger exited. (Halted State: %s)\n", ctx->Halted ? "YES" : "NO");
 }
-
 // ============================================================================
-// ÃüÁî´¦ÀíÊµÏÖ (Command Handlers)
+// å‘½ä»¤å¤„ç†å®ç° (Command Handlers)
 // ============================================================================
-
 static void PrintHelp() {
     printf("\n--- Command Help ---\n");
     printf(" Execution:\n");
     printf("  s [N]     : Step Into (execute N instructions, default 1)\n");
-    printf("  n         : Step Over (skip CALL¡¢LOOP¡¢REP... instructions)\n");
+    printf("  n         : Step Over (skip CALLã€LOOPã€REP... instructions)\n");
     printf("  c         : Continue (run until breakpoint or halt)\n");
     printf("  q         : Quit debugger (halt CPU)\n");
     printf(" Breakpoints:\n");
@@ -153,27 +137,24 @@ static void PrintHelp() {
     printf("  ew <addr> <val>   : Edit memory Word (e.g., ew 401000 1234)\n");
     printf("  ed <addr> <val>   : Edit memory DWORD (e.g., ed 401000 12345678)\n"); 
 }
-
 static void Cmd_StepInto(CPU_Context* ctx, const char* args) {
     int count = 1;
     if (*args) {
         if (sscanf(args, "%d", &count) != 1 || count <= 0) count = 1;
     }
-
     printf("Stepping %d instructions...\n", count);
     for (int i = 0; i < count; i++) {
         if (ctx->Halted) break;
-        // --- ÌØÊâ´¦Àí INT 3 ---
+        // --- ç‰¹æ®Šå¤„ç† INT 3 ---
         if (IsSoftwareBreakpoint(ctx->EIP)) {
             printf("[Step] Trapped by INT 3 at 0x%08X (Skipping instruction)\n", ctx->EIP);
-            ctx->EIP++; // ÊÖ¶¯Ìø¹ı 0xCC ×Ö½Ú
-            // Í¨³£Óöµ½¶ÏµãºóÓ¦¸ÃÁ¢¿ÌÍ£Ö¹²½½ø£¬°Ñ¿ØÖÆÈ¨½»¸øÓÃ»§
+            ctx->EIP++; // æ‰‹åŠ¨è·³è¿‡ 0xCC å­—èŠ‚
+            // é€šå¸¸é‡åˆ°æ–­ç‚¹ååº”è¯¥ç«‹åˆ»åœæ­¢æ­¥è¿›ï¼ŒæŠŠæ§åˆ¶æƒäº¤ç»™ç”¨æˆ·
             break;
         }
-            //Ö´ĞĞÖ¸Áî
+            //æ‰§è¡ŒæŒ‡ä»¤
             runcpu(ctx, 1);
-
-            // Èç¹û²½½ø¹ı³ÌÖĞÓöµ½¶Ïµã£¨·Çµ±Ç°Ö¸Áî£©£¬ÔİÍ£
+            // å¦‚æœæ­¥è¿›è¿‡ç¨‹ä¸­é‡åˆ°æ–­ç‚¹ï¼ˆéå½“å‰æŒ‡ä»¤ï¼‰ï¼Œæš‚åœ
             if (i < count - 1 && IsBreakpoint(ctx->EIP)) {
                 printf("[Step] Stopped at breakpoint 0x%08X\n", ctx->EIP);
                 break;
@@ -181,27 +162,24 @@ static void Cmd_StepInto(CPU_Context* ctx, const char* args) {
     }
 }
 static void Cmd_StepOver(CPU_Context* ctx, DecodeContext* d_ctx) {
-    // Ê¹ÓÃĞÂµÄÅĞ¶ÏÂß¼­
+    // ä½¿ç”¨æ–°çš„åˆ¤æ–­é€»è¾‘
     if (IsStepOverCandidate(d_ctx)) {
-        // ¼ÆËã"ÏÂÒ»²½"µÄÄ¿±êµØÖ· (¼´µ±Ç°Ö¸ÁîµÄÏÂÒ»ÌõÖ¸ÁîµØÖ·)
-        // ÎŞÂÛÊÇ LOOP Ìø»ØÈ¥ÁË£¬»¹ÊÇ REP Ô­µØ´ò×ª£¬Ö»Òª EIP ²»µÈÓÚÕâ¸öµØÖ·£¬¾ÍËµÃ÷»¹Ã»Ö´ĞĞÍê
+        // è®¡ç®—"ä¸‹ä¸€æ­¥"çš„ç›®æ ‡åœ°å€ (å³å½“å‰æŒ‡ä»¤çš„ä¸‹ä¸€æ¡æŒ‡ä»¤åœ°å€)
+        // æ— è®ºæ˜¯ LOOP è·³å›å»äº†ï¼Œè¿˜æ˜¯ REP åŸåœ°æ‰“è½¬ï¼Œåªè¦ EIP ä¸ç­‰äºè¿™ä¸ªåœ°å€ï¼Œå°±è¯´æ˜è¿˜æ²¡æ‰§è¡Œå®Œ
         uint32_t target_eip = ctx->EIP + d_ctx->instr_len;
-
         printf("[Debugger] Stepping over Block/Call... (Target EIP: 0x%08X)\n", target_eip);
-        // ·ÀÖ¹ÎŞÏŞÑ­»· (±ÈÈç jmp $ »òÕßËÀÑ­»·µÄ LOOP)£¬ÉèÖÃÒ»¸ö½Ï´óµÄ²½ÊıÉÏÏŞ
+        // é˜²æ­¢æ— é™å¾ªç¯ (æ¯”å¦‚ jmp $ æˆ–è€…æ­»å¾ªç¯çš„ LOOP)ï¼Œè®¾ç½®ä¸€ä¸ªè¾ƒå¤§çš„æ­¥æ•°ä¸Šé™
         int max_steps = 5000000;
-
         while (ctx->EIP != target_eip && !ctx->Halted && max_steps-- > 0) {
-            // --- À¹½Ø»úÖÆ ---
-            // 1. ¼ì²éÖĞ¼äÊÇ·ñÓöµ½ÁË INT 3 (Èí¶Ïµã)
+            // --- æ‹¦æˆªæœºåˆ¶ ---
+            // 1. æ£€æŸ¥ä¸­é—´æ˜¯å¦é‡åˆ°äº† INT 3 (è½¯æ–­ç‚¹)
             if (IsSoftwareBreakpoint(ctx->EIP)) {
                 printf("\n[Debugger] Hit INT 3 inside StepOver at 0x%08X\n", ctx->EIP);
-                break; // Í£Ö¹²½¹ı£¬½»»¹¿ØÖÆÈ¨
+                break; // åœæ­¢æ­¥è¿‡ï¼Œäº¤è¿˜æ§åˆ¶æƒ
             }
-            // Ö´ĞĞµ¥²½
+            // æ‰§è¡Œå•æ­¥
             runcpu(ctx, 1);
-
-            // 2. ¼ì²éÖĞ¼äÊÇ·ñÓöµ½ÁËÓÃ»§ÉèÖÃµÄ¶Ïµã (b <addr>)
+            // 2. æ£€æŸ¥ä¸­é—´æ˜¯å¦é‡åˆ°äº†ç”¨æˆ·è®¾ç½®çš„æ–­ç‚¹ (b <addr>)
             if (IsBreakpoint(ctx->EIP)) {
                 printf("\n[Debugger] Hit User Breakpoint inside StepOver at 0x%08X\n", ctx->EIP);
                 break;
@@ -210,42 +188,35 @@ static void Cmd_StepOver(CPU_Context* ctx, DecodeContext* d_ctx) {
         if (max_steps <= 0) {
             printf("[Warn] StepOver timeout (Loop too long or infinite?). Stopped.\n");
         }
-
     } else {
-        // Èç¹û²»ÊÇÌØÊâÖ¸Áî£¬StepOver µÈÍ¬ÓÚ StepInto
+        // å¦‚æœä¸æ˜¯ç‰¹æ®ŠæŒ‡ä»¤ï¼ŒStepOver ç­‰åŒäº StepInto
         Cmd_StepInto(ctx, "");
     }
 }
-
 static void Cmd_Continue(CPU_Context* ctx) {
     printf("Running... (Press Ctrl+C if stuck loop)\n");
-
-    // Èç¹ûµ±Ç°¾ÍÔÚ×Ô¶¨Òå¶ÏµãÉÏ£¬ÏÈ×ßÒ»²½£¬·ÀÖ¹ËÀÑ­»·
-    // (×¢£ºÈç¹ûÊÇ INT 3£¬ÓÃ»§ĞèÒªÏÈ°´ 's' Ìø¹ı£¬·ñÔò 'c' »áÁ¢¿ÌÔÙ´Î±» INT 3 À¹½Ø)
+    // å¦‚æœå½“å‰å°±åœ¨è‡ªå®šä¹‰æ–­ç‚¹ä¸Šï¼Œå…ˆèµ°ä¸€æ­¥ï¼Œé˜²æ­¢æ­»å¾ªç¯
+    // (æ³¨ï¼šå¦‚æœæ˜¯ INT 3ï¼Œç”¨æˆ·éœ€è¦å…ˆæŒ‰ 's' è·³è¿‡ï¼Œå¦åˆ™ 'c' ä¼šç«‹åˆ»å†æ¬¡è¢« INT 3 æ‹¦æˆª)
     if (IsBreakpoint(ctx->EIP)) {
         runcpu(ctx, 1);
     }
-
-    // ³ÖĞøÔËĞĞ
+    // æŒç»­è¿è¡Œ
     while (!ctx->Halted) {
-        //  ÔËĞĞÇ°¼ì²é INT 3 ---
-        // ±ØĞëÔÚ runcpu Ö®Ç°¼ì²é£¬·ñÔò CPU Ö´ĞĞµ½ CC ¿ÉÄÜ»á Halt
+        //  è¿è¡Œå‰æ£€æŸ¥ INT 3 ---
+        // å¿…é¡»åœ¨ runcpu ä¹‹å‰æ£€æŸ¥ï¼Œå¦åˆ™ CPU æ‰§è¡Œåˆ° CC å¯èƒ½ä¼š Halt
         if (IsSoftwareBreakpoint(ctx->EIP)) {
             printf("\n[Debugger] Hit Software Breakpoint (INT 3) at 0x%08X\n", ctx->EIP);
-            // ¹Ø¼ü£º²»ÉèÖÃ Halted£¬Ö±½Ó break ³öÑ­»·£¬»Øµ½ Debugger µÄ while ÊäÈëÑ­»·
+            // å…³é”®ï¼šä¸è®¾ç½® Haltedï¼Œç›´æ¥ break å‡ºå¾ªç¯ï¼Œå›åˆ° Debugger çš„ while è¾“å…¥å¾ªç¯
             break;
         }
-
         runcpu(ctx, 1);
-
-        // ¼ì²éÓÃ»§¶¨ÒåµÄ¶Ïµã (¶ÏµãÊı×é)
+        // æ£€æŸ¥ç”¨æˆ·å®šä¹‰çš„æ–­ç‚¹ (æ–­ç‚¹æ•°ç»„)
         if (IsBreakpoint(ctx->EIP)) {
             printf("\n[Debugger] Hit Breakpoint at 0x%08X\n", ctx->EIP);
             break;
         }
     }
 }
-
 static void Cmd_AddBreakpoint(const char* args) {
     uint32_t addr = 0;
     if (sscanf(args, "%x", &addr) == 1) {
@@ -263,7 +234,6 @@ static void Cmd_AddBreakpoint(const char* args) {
         printf("Usage: b <hex_addr>\n");
     }
 }
-
 static void Cmd_ListBreakpoints() {
     if (g_BpCount == 0) {
         printf("No breakpoints set.\n");
@@ -274,59 +244,50 @@ static void Cmd_ListBreakpoints() {
         }
     }
 }
-
 static void Cmd_ClearBreakpoints() {
     g_BpCount = 0;
     printf("All breakpoints cleared.\n");
 }
-
 static void Cmd_ShowRegs(CPU_Context* ctx) {
     ShowState(ctx);
 }
-
 static void Cmd_Disasm(CPU_Context* ctx, const char* args) {
     int lines = 5;
     if (*args) {
         sscanf(args, "%d", &lines);
         if (lines <= 0) lines = 5;
-        if (lines > 50) lines = 50; // ÏŞÖÆ×î´óĞĞÊı
+        if (lines > 50) lines = 50; // é™åˆ¶æœ€å¤§è¡Œæ•°
     }
-
     uint32_t temp_eip = ctx->EIP;
     DecodeContext temp_dctx;
-
     printf("Disassembly (%d lines):\n", lines);
     for (int i = 0; i < lines; i++) {
         ParseInstuction((uint8_t*)temp_eip, temp_eip, &temp_dctx);
         FormatInstruction((uint8_t*)temp_eip, &temp_dctx);
-
         printf("  0x%08X: ", temp_eip);
-        // ´òÓ¡»úÆ÷Âë
+        // æ‰“å°æœºå™¨ç 
         for (int j = 0; j < temp_dctx.instr_len; j++) {
             printf("%02X", ((uint8_t*)temp_eip)[j]);
         }
-        // ¶ÔÆë¿Õ¸ñ
+        // å¯¹é½ç©ºæ ¼
         for (int j = temp_dctx.instr_len; j < 8; j++) printf("  ");
-
         printf(" | %s\n", temp_dctx.asm_str);
-
         temp_eip += temp_dctx.instr_len;
     }
 }
-
 static void Cmd_MemDump(const char* args) {
     uint32_t addr = 0;
     if (sscanf(args, "%x", &addr) == 1) {
         printf("Memory at 0x%08X:\n", addr);
-        // ÏÔÊ¾ 4 ĞĞ£¬Ã¿ĞĞ 16 ×Ö½Ú
+        // æ˜¾ç¤º 4 è¡Œï¼Œæ¯è¡Œ 16 å­—èŠ‚
         for (int i = 0; i < 4; i++) {
             uint32_t line_addr = addr + i * 16;
             printf("  %08X: ", line_addr);
-            // Hex²¿·Ö
+            // Hexéƒ¨åˆ†
             for (int j = 0; j < 16; j++) {
                 printf("%02X ", MemRead(line_addr + j, 1));
             }
-            // ASCII²¿·Ö
+            // ASCIIéƒ¨åˆ†
             printf(" | ");
             for (int j = 0; j < 16; j++) {
                 uint8_t val = MemRead(line_addr + j, 1);
@@ -338,18 +299,15 @@ static void Cmd_MemDump(const char* args) {
         printf("Usage: m <hex_addr>\n");
     }
 }
-
 static void Cmd_MemEdit(const char* args) {
     uint32_t addr = 0;
     int n_read = 0;
-
-    // ½âÎöÆğÊ¼µØÖ·
+    // è§£æèµ·å§‹åœ°å€
     if (sscanf(args, "%x%n", &addr, &n_read) == 1) {
         const char* ptr = args + n_read;
         unsigned int byte_val;
         int count = 0;
-
-        // Ñ­»·½âÎöºóĞø×Ö½Ú
+        // å¾ªç¯è§£æåç»­å­—èŠ‚
         while (sscanf(ptr, "%x%n", &byte_val, &n_read) == 1) {
             MemWrite(addr + count, (uint8_t)byte_val, 1);
             count++;
@@ -360,7 +318,6 @@ static void Cmd_MemEdit(const char* args) {
         printf("Usage: e <addr> <byte1> <byte2> ...\n");
     }
 }
-
 static void Cmd_RegWrite(CPU_Context* ctx, const char* args) {
     char target[32];
     uint32_t val;
@@ -374,11 +331,9 @@ static void Cmd_RegWrite(CPU_Context* ctx, const char* args) {
         printf("Usage: w <reg/flag> <hex_value>\n");
     }
 }
-
 // ============================================================================
-// ¸¨ÖúÓëÏÔÊ¾º¯ÊıÊµÏÖ
+// è¾…åŠ©ä¸æ˜¾ç¤ºå‡½æ•°å®ç°
 // ============================================================================
-
 void PrintFlags(CPU_Context* ctx) {
     printf("FLAGS: [ ");
     if (ctx->EFLAGS.CF) printf("CF ");
@@ -391,25 +346,20 @@ void PrintFlags(CPU_Context* ctx) {
     if (ctx->EFLAGS.IF) printf("IF ");
     printf("] (Raw: 0x%08X)\n", ctx->EFLAGS.Value);
 }
-
 void PrintFPU(CPU_Context* ctx) {
     int top = ctx->FPU.SW.TOP;
     printf("FPU SW: TOP=%d  C3=%d C2=%d C1=%d C0=%d\n",
         top, ctx->FPU.SW.C3, ctx->FPU.SW.C2, ctx->FPU.SW.C1, ctx->FPU.SW.C0);
-
     printf("   Reg |      Double Value      | Logical ST(i)\n");
     printf("   ----+------------------------+--------------\n");
     for (int i = 0; i < 8; i++) {
         int logical_idx = (i - top + 8) & 7;
         char logical_str[16] = "";
-
         if (i == top) sprintf(logical_str, "<- ST(0) TOP");
         else sprintf(logical_str, "   ST(%d)", logical_idx);
-
         printf("   R%d  | %22.10f | %s\n", i, ctx->FPU.Regs[i], logical_str);
     }
 }
-
 void ShowState(CPU_Context* ctx) {
     printf("\n--- CPU STATE ---------------------------------------------------\n");
     printf("EAX: 0x%08X  EBX: 0x%08X  ECX: 0x%08X  EDX: 0x%08X\n",
@@ -417,38 +367,31 @@ void ShowState(CPU_Context* ctx) {
     printf("ESI: 0x%08X  EDI: 0x%08X  EBP: 0x%08X  ESP: 0x%08X\n",
         ctx->ESI.I32, ctx->EDI.I32, ctx->EBP.I32, ctx->ESP.I32);
     printf("EIP: 0x%08X  ", ctx->EIP);
-
-    // ¼òµ¥ÏÔÊ¾¶Î¼Ä´æÆ÷
+    // ç®€å•æ˜¾ç¤ºæ®µå¯„å­˜å™¨
     printf("CS:%04X DS:%04X ES:%04X SS:%04X\n",
         ctx->CS, ctx->DS, ctx->ES, ctx->SS);
-
     PrintFlags(ctx);
     printf("--- FPU ---------------------------------------------------------\n");
     PrintFPU(ctx);
     printf("-----------------------------------------------------------------\n");
 }
-
 static bool IsBreakpoint(uint32_t eip) {
     for (int i = 0; i < g_BpCount; i++) {
         if (g_Breakpoints[i] == eip) return true;
     }
     return false;
 }
-
 static void ToUpperStr(char* str) {
     for (; *str; ++str) *str = toupper((unsigned char)*str);
 }
-
 // ============================================================================
-// SetCpuState (¸ßĞÔÄÜSwitch°æ±¾)
+// SetCpuState (é«˜æ€§èƒ½Switchç‰ˆæœ¬)
 // ============================================================================
-
 bool SetCpuState(CPU_Context* ctx, const char* name_in, uint32_t val) {
     char name[32];
     strncpy(name, name_in, 31);
     name[31] = '\0';
     ToUpperStr(name);
-
     switch (name[0]) {
         case 'E': // EAX..EIP, ES
             if (strcmp(name, "EAX") == 0) ctx->EAX.I32 = val;
@@ -463,26 +406,22 @@ bool SetCpuState(CPU_Context* ctx, const char* name_in, uint32_t val) {
             else if (strcmp(name, "ES") == 0)  ctx->ES = (uint16_t)val;
             else return false;
             break;
-
         case 'A': // AX, AF
             if (strcmp(name, "AX") == 0) ctx->EAX.I16 = (uint16_t)val;
             else if (strcmp(name, "AF") == 0) ctx->EFLAGS.AF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'B': // BX, BP
             if (strcmp(name, "BX") == 0) ctx->EBX.I16 = (uint16_t)val;
             else if (strcmp(name, "BP") == 0) ctx->EBP.I16 = (uint16_t)val;
             else return false;
             break;
-
         case 'C': // CX, CS, CF
             if (strcmp(name, "CX") == 0) ctx->ECX.I16 = (uint16_t)val;
             else if (strcmp(name, "CS") == 0) ctx->CS = (uint16_t)val;
             else if (strcmp(name, "CF") == 0) ctx->EFLAGS.CF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'D': // DX, DI, DS, DF
             if (strcmp(name, "DX") == 0) ctx->EDX.I16 = (uint16_t)val;
             else if (strcmp(name, "DI") == 0) ctx->EDI.I16 = (uint16_t)val;
@@ -490,7 +429,6 @@ bool SetCpuState(CPU_Context* ctx, const char* name_in, uint32_t val) {
             else if (strcmp(name, "DF") == 0) ctx->EFLAGS.DF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'S': // SI, SP, SS, SF
             if (strcmp(name, "SI") == 0) ctx->ESI.I16 = (uint16_t)val;
             else if (strcmp(name, "SP") == 0) ctx->ESP.I16 = (uint16_t)val;
@@ -498,164 +436,135 @@ bool SetCpuState(CPU_Context* ctx, const char* name_in, uint32_t val) {
             else if (strcmp(name, "SF") == 0) ctx->EFLAGS.SF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'F': // FS
             if (strcmp(name, "FS") == 0) ctx->FS = (uint16_t)val;
             else return false;
             break;
-
         case 'G': // GS
             if (strcmp(name, "GS") == 0) ctx->GS = (uint16_t)val;
             else return false;
             break;
-
         case 'I': // IF
             if (strcmp(name, "IF") == 0) ctx->EFLAGS.IF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'O': // OF
             if (strcmp(name, "OF") == 0) ctx->EFLAGS.OF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'P': // PF
             if (strcmp(name, "PF") == 0) ctx->EFLAGS.PF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'Z': // ZF
             if (strcmp(name, "ZF") == 0) ctx->EFLAGS.ZF = (val ? 1 : 0);
             else return false;
             break;
-
         case 'T': // TOP
             if (strcmp(name, "TOP") == 0) ctx->FPU.SW.TOP = (val & 7);
             else return false;
             break;
-
         default:
             return false;
     }
-
     return true;
 }
-
-// ¼ì²éµ±Ç°µØÖ·ÊÇ·ñÊÇ INT 3 Ö¸Áî
+// æ£€æŸ¥å½“å‰åœ°å€æ˜¯å¦æ˜¯ INT 3 æŒ‡ä»¤
 static bool IsSoftwareBreakpoint(uint32_t eip) {
     uint8_t opcode = MemRead(eip, 1);
     return (opcode == 0xCC);
 }
-
 // ============================================================================
-// [ĞÂÔö] ¶ÑÕ»²é¿´¹¦ÄÜ
+// [æ–°å¢] å †æ ˆæŸ¥çœ‹åŠŸèƒ½
 // ============================================================================
 static void Cmd_StackDump(CPU_Context* ctx, const char* args) {
-    int count = 8; // Ä¬ÈÏÏÔÊ¾Õ»¶¥ÒÔÏÂµÄ 8 ¸ö DWORD
+    int count = 8; // é»˜è®¤æ˜¾ç¤ºæ ˆé¡¶ä»¥ä¸‹çš„ 8 ä¸ª DWORD
     if (*args) {
         int input_cnt = 0;
         if (sscanf(args, "%d", &input_cnt) == 1 && input_cnt > 0) {
             count = input_cnt;
         }
     }
-    // ÎÒÃÇÏÔÊ¾Ò»µãµã ESP "ÉÏ·½" (µÍµØÖ·) µÄÄÚÈİ£¬×÷ÎªÉÏÏÂÎÄ (±ÈÈç 2 ¸ö DWORD)
-    // ×¢Òâ£ºx86 Õ»ÊÇÏòµÍµØÖ·Ôö³¤µÄ¡£
-    // [High Addr] <--- Õ»µ×
+    // æˆ‘ä»¬æ˜¾ç¤ºä¸€ç‚¹ç‚¹ ESP "ä¸Šæ–¹" (ä½åœ°å€) çš„å†…å®¹ï¼Œä½œä¸ºä¸Šä¸‹æ–‡ (æ¯”å¦‚ 2 ä¸ª DWORD)
+    // æ³¨æ„ï¼šx86 æ ˆæ˜¯å‘ä½åœ°å€å¢é•¿çš„ã€‚
+    // [High Addr] <--- æ ˆåº•
     // ...
-    // [ESP]       <--- Õ»¶¥ (µ±Ç°Êı¾İ)
-    // [ESP - 4]   <--- À¬»øÊı¾İ / ÏÂÒ»´Î PUSH µÄÎ»ÖÃ
-
+    // [ESP]       <--- æ ˆé¡¶ (å½“å‰æ•°æ®)
+    // [ESP - 4]   <--- åƒåœ¾æ•°æ® / ä¸‹ä¸€æ¬¡ PUSH çš„ä½ç½®
     int lines_above = 2;
     uint32_t esp = ctx->ESP.I32;
     uint32_t ebp = ctx->EBP.I32;
-
     printf("Stack Dump (ESP=0x%08X):\n", esp);
     printf("Address     Value       ASCII   Annotation\n");
     printf("----------  ----------  -----   ------------------\n");
-
     for (int i = -lines_above; i < count; i++) {
         uint32_t addr = esp + (i * 4);
-
         // ========================================================
-        // ¡¾ºËĞÄĞŞ¸Ä¡¿±ß½ç¼ì²é
+        // ã€æ ¸å¿ƒä¿®æ”¹ã€‘è¾¹ç•Œæ£€æŸ¥
         // ========================================================
-        // ¼ì²é addr ÊÇ·ñÂä·ÖÅäµÄ¶ÑÕ»Çø¼äÄÚ
-        // ×¢Òâ£ºaddr ÊÇÒª¶Á 4 ×Ö½Ú£¬ËùÒÔ addr+3 Ò²²»ÄÜÔ½½ç
+        // æ£€æŸ¥ addr æ˜¯å¦è½åˆ†é…çš„å †æ ˆåŒºé—´å†…
+        // æ³¨æ„ï¼šaddr æ˜¯è¦è¯» 4 å­—èŠ‚ï¼Œæ‰€ä»¥ addr+3 ä¹Ÿä¸èƒ½è¶Šç•Œ
         if (addr < (uint32_t)g_StackMemory || addr + 4 > (uint32_t)g_StackMemory + 1024 * 64) {
-            // Èç¹ûÔ½½çÁË£¬´òÓ¡Ò»¸öÌáÊ¾£¬È»ºóÌø¹ı
-            // ÕâÑùÄã¾Í¿´µ½ÁË¶ÑÕ»µÄ¾¡Í·£¬¶ø²»ÊÇ³ÌĞò±ÀÀ£
-            if (i == -lines_above) continue; // Èç¹ûÊÇÉÏ·½Ô½½ç£¨»¹Ã»ÈëÕ»µÄµØ·½£©£¬Ö±½Ó²»ÏÔÊ¾
+            // å¦‚æœè¶Šç•Œäº†ï¼Œæ‰“å°ä¸€ä¸ªæç¤ºï¼Œç„¶åè·³è¿‡
+            // è¿™æ ·ä½ å°±çœ‹åˆ°äº†å †æ ˆçš„å°½å¤´ï¼Œè€Œä¸æ˜¯ç¨‹åºå´©æºƒ
+            if (i == -lines_above) continue; // å¦‚æœæ˜¯ä¸Šæ–¹è¶Šç•Œï¼ˆè¿˜æ²¡å…¥æ ˆçš„åœ°æ–¹ï¼‰ï¼Œç›´æ¥ä¸æ˜¾ç¤º
             printf("0x%08X  [Out of Stack Range] \n", addr);
-            break; // ÏÂ·½Ô½½ç£¨Õ»µ×Ö®Íâ£©£¬Ö±½ÓÍ£Ö¹ºóĞø´òÓ¡
+            break; // ä¸‹æ–¹è¶Šç•Œï¼ˆæ ˆåº•ä¹‹å¤–ï¼‰ï¼Œç›´æ¥åœæ­¢åç»­æ‰“å°
         }
         uint32_t val = MemRead(addr, 4);
-
-        // ¼òµ¥µÄ ASCII ¿ÉÊÓ»¯
+        // ç®€å•çš„ ASCII å¯è§†åŒ–
         char ascii[5];
         for (int b = 0; b < 4; b++) {
             uint8_t byte = (val >> (b * 8)) & 0xFF;
             ascii[b] = (isprint(byte)) ? byte : '.';
         }
         ascii[4] = '\0';
-
-        // ´òÓ¡µØÖ·ºÍÊ®Áù½øÖÆÖµ
+        // æ‰“å°åœ°å€å’Œåå…­è¿›åˆ¶å€¼
         printf("0x%08X  0x%08X  %s  ", addr, val, ascii);
-
-        // ´òÓ¡¼ıÍ·ºÍ±ê¼Ç
+        // æ‰“å°ç®­å¤´å’Œæ ‡è®°
         int has_note = 0;
-
         if (addr == esp) {
             printf("<--- ESP (Top)");
             has_note = 1;
         }
-
         if (addr == ebp) {
             printf("%s<--- EBP (Frame)", has_note ? " / " : "");
             has_note = 1;
         }
-
-        // ¼òµ¥µÄÖÇÄÜ·ÖÎö£ºÈç¹ûÖµ¿´ÆğÀ´Ïñ¸öÕ»ÄÚµÄÖ¸Õë£¨Ö¸ÏòÕ»¸½½ü£©
-        // ÕâÀïµÄÅĞ¶Ï±È½Ï´Ö²Ú£¬½ö×÷ÎªÊ¾Àı
+        // ç®€å•çš„æ™ºèƒ½åˆ†æï¼šå¦‚æœå€¼çœ‹èµ·æ¥åƒä¸ªæ ˆå†…çš„æŒ‡é’ˆï¼ˆæŒ‡å‘æ ˆé™„è¿‘ï¼‰
+        // è¿™é‡Œçš„åˆ¤æ–­æ¯”è¾ƒç²—ç³™ï¼Œä»…ä½œä¸ºç¤ºä¾‹
         if (val > esp && val < esp + 0x1000) {
             printf("%s(Ptr to Stack?)", has_note ? " " : "");
         }
-
         printf("\n");
     }
 }
-
-// ÅĞ¶Ïµ±Ç°Ö¸ÁîÊÇ·ñÖµµÃ "Step Over" (²½¹ı)
-// °üÀ¨: CALL, LOOP, REPÇ°×º, INT n
+// åˆ¤æ–­å½“å‰æŒ‡ä»¤æ˜¯å¦å€¼å¾— "Step Over" (æ­¥è¿‡)
+// åŒ…æ‹¬: CALL, LOOP, REPå‰ç¼€, INT n
 static bool IsStepOverCandidate(DecodeContext* d_ctx) {
     uint8_t op = d_ctx->opcode;
-
-    // 1. CALL ÏµÁĞ
+    // 1. CALL ç³»åˆ—
     // 0xE8: CALL rel, 0x9A: CALL ptr
     if (op == 0xE8 || op == 0x9A) return true;
     // 0xFF /2: CALL r/m
     if (op == 0xFF && d_ctx->reg == 2) return true;
-
-    // 2. LOOP ÏµÁĞ (0xE0 ~ 0xE2)
+    // 2. LOOP ç³»åˆ— (0xE0 ~ 0xE2)
     // 0xE0: LOOPNE, 0xE1: LOOPE, 0xE2: LOOP
     if (op >= 0xE0 && op <= 0xE2) return true;
-
-    // 3. REP Ç°×ºÏµÁĞ (ÓÃÓÚ×Ö·û´®²Ù×÷ MOVS, STOS, SCAS µÈ)
+    // 3. REP å‰ç¼€ç³»åˆ— (ç”¨äºå­—ç¬¦ä¸²æ“ä½œ MOVS, STOS, SCAS ç­‰)
     // 0xF2: REPNE, 0xF3: REP/REPE
-    // ×¢Òâ: ÔÚ·´»ã±àÒıÇæÖĞ£¬F2/F3 ±»Ê¶±ğÎªÇ°×º  (Í¨³£ÊÇÕâÑù)£¬ÔòÓ¦¸Ã²½¹ı
+    // æ³¨æ„: åœ¨åæ±‡ç¼–å¼•æ“ä¸­ï¼ŒF2/F3 è¢«è¯†åˆ«ä¸ºå‰ç¼€  (é€šå¸¸æ˜¯è¿™æ ·)ï¼Œåˆ™åº”è¯¥æ­¥è¿‡
     if (d_ctx->pfx_rep || d_ctx->pfx_repne) return true;
-
-    // 4. ÈíÖĞ¶Ï (INT n)
-    // 0xCD: INT n (Èç INT 21h, INT 80h)
-    // Í¨³£µ÷ÊÔÊ±²»Ï£Íû½øÈëÖĞ¶Ï´¦Àí³ÌĞò£¬¶øÊÇÖ±½Ó¿´½á¹û
+    // 4. è½¯ä¸­æ–­ (INT n)
+    // 0xCD: INT n (å¦‚ INT 21h, INT 80h)
+    // é€šå¸¸è°ƒè¯•æ—¶ä¸å¸Œæœ›è¿›å…¥ä¸­æ–­å¤„ç†ç¨‹åºï¼Œè€Œæ˜¯ç›´æ¥çœ‹ç»“æœ
     if (op == 0xCD) return true;
-
     return false;
 }
-
 static void Cmd_MemWriteVal(const char* args, int byte_width) {
     uint32_t addr = 0;
     uint32_t val = 0;
-    // ½âÎö¸ñÊ½: ed 00401000 12345678
+    // è§£ææ ¼å¼: ed 00401000 12345678
     if (sscanf(args, "%x %x", &addr, &val) == 2) {
         MemWrite(addr, val, byte_width);
         printf("Memory Write: [0x%08X] = 0x%X (%d bytes)\n", addr, val, byte_width);
