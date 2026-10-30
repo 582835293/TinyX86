@@ -1,107 +1,101 @@
-# 项目关系与共享代码管理
+# 项目关系与 Git 子模块（Submodule）保姆级同步指南
 
-这些项目来自滴水逆向学习练习。每个应用独立发布；共享库保留独立 Git 历史，通过 Git 子模块固定依赖提交，通过 Visual Studio `ProjectReference` 或 CMake 静态库目标编译链接。
+这些项目来自滴水逆向学习练习。每个应用独立发布；共享库（`Core-x86-Disassembler` 与 `PETools`）保留独立 Git 历史，通过 `deps/` 下的 **Git 子模块（Submodule）** 固定依赖版本。
 
 | 仓库 | 职责 |
 | --- | --- |
-| [TinyX86](https://github.com/582835293/TinyX86) | CPU 模拟器、加载器与交互调试器 |
-| [Core-x86-Disassembler](https://github.com/582835293/Core-x86-Disassembler) | x86 指令解码静态库与命令行演示 |
-| [PETools](https://github.com/582835293/PETools) | PE32 解析和编辑静态库 |
+| [TinyX86](https://github.com/582835293/TinyX86) | CPU 模拟器、加载器与交互调试器（父仓库） |
+| [Core-x86-Disassembler](https://github.com/582835293/Core-x86-Disassembler) | x86 指令解码静态库与命令行演示（子模块：`deps/Core-x86-Disassembler`） |
+| [PETools](https://github.com/582835293/PETools) | PE32 解析和编辑静态库（子模块：`deps/PETools`） |
 | [JiaquanPEViewerV1.0](https://github.com/582835293/JiaquanPEViewerV1.0) | Win32 API 图形界面练习与 PE 查看器 |
 
-```mermaid
-graph TD
-  Tiny[TinyX86] --> Decoder[Core-x86-Disassembler / CoreX86 静态库]
-  Tiny --> PE[PETools 静态库]
-  Demo[反汇编引擎命令行演示] --> Decoder
-  Demo --> PE
-  Viewer[JiaquanPEViewerV1.0] --> PE
-```
+---
 
-解码核心只依赖 C 标准库，独立于 PETools 和执行器。反汇编仓库中的 PE 演示依赖 PETools。TinyX86 子模块里出现的嵌套 PETools 是演示程序自己的依赖；TinyX86 只链接顶层 PETools 一次。
+## 核心概念：先花 1 分钟理解 Git 子模块是怎么工作的
 
-## 三种关系各管什么
+很多刚接触 Git Submodule 的同学会疑惑：**“为什么我在 GitHub 上更新了 `Core-x86-Disassembler` 仓库，但 `TinyX86` 里却没有自动变新？”**
 
-- Git 仓库：决定代码在哪里维护、提交和发布。
-- Git 子模块：在应用的 `deps/` 中保存库仓库，并在父仓库里记录准确的提交号；GitHub 中可以点击进入对应库和版本。
-- Visual Studio 项目引用：决定先构建哪个 `.lib`、应用如何链接；头文件搜索目录在 `.vcxproj` 中配置。
+原因非常简单：
+- `TinyX86`（父仓库）并**不会**直接把 `Core-x86-Disassembler` 的文件存进自己的仓库里，也不跟踪它的分支，而是只记录了一个 **固定的 Commit ID（提交哈希号，相当于书签）**。
+- 这样做的好处是：哪怕以后你把 `Core-x86-Disassembler` 改坏了，当前版本的 `TinyX86` 依然锁死在之前测试通过的那个 Commit 上，永远不会莫名其妙编译失败。
+- 因此，当你更新了 `Core-x86-Disassembler` 之后，只需要在 `TinyX86` 里 **“把子模块拉到最新 Commit → 在父仓库里保存这个新书签并推送”** 即可！
 
-解决方案 `.slnx` 负责组织项目，本身不会建立 Git 仓库之间的依赖。
+---
 
-## 第一次下载
+## 场景一：你在别的目录（或 GitHub 上）更新了 `Core-x86-Disassembler`，怎么同步到現在の `TinyX86`？
 
-```powershell
-git clone --recurse-submodules https://github.com/582835293/TinyX86.git
-cd TinyX86
-```
+假设你已经在 `Core-x86-Disassembler` 自己的仓库里改好了代码并 `git push` 到了 GitHub 的 `main` 分支。现在打开终端，进入 `TinyX86` 根目录，按顺序执行以下 **4 条命令**：
 
-如果已经下载但 `deps/` 为空：
-
-```powershell
-git submodule sync --recursive
+```bash
+# 第 1 步：确保 deps/ 下的子模块已经初始化（如果以前拉取过，这步只是保险检查）
 git submodule update --init --recursive
-```
 
-GitHub 的 Download ZIP 不包含子模块代码；构建请用 Git 递归克隆。
+# 第 2 步：让 deps/Core-x86-Disassembler 去 GitHub 拉取它的最新 main 分支代码
+git -C deps/Core-x86-Disassembler fetch origin
+git -C deps/Core-x86-Disassembler checkout origin/main
 
-## 平时怎么修改共享库
+# 第 3 步：重新编译并跑一下测试，确认新版反汇编引擎和 TinyX86 完全兼容
+cmake -S . -B build
+cmake --build build --config Debug
+ctest --test-dir build -C Debug --output-on-failure
 
-每个共享库只有一个上游仓库。不同应用里的子模块是该仓库的独立检出，不会在磁盘上自动同步。不要再把 `.c/.h` 手工复制回应用根目录。
-
-例如直接在 TinyX86 的 PETools 子模块修复问题：
-
-```powershell
-git -C deps/PETools switch -c fix/pe-header
-# 编辑 deps/PETools 中的代码，编译、测试
-git -C deps/PETools add PETools.c PETools.h
-git -C deps/PETools commit -m "fix: correct PE header parsing"
-git -C deps/PETools push -u origin fix/pe-header
-# 在 GitHub 审阅并合入 PETools/main 后，回到应用根目录
-git -C deps/PETools fetch origin
-git -C deps/PETools checkout origin/main
-git add deps/PETools
-git commit -m "chore: update PETools"
+# 第 4 步：在 TinyX86 父仓库里记录新的子模块版本号（书签），并推送到 GitHub！
+git add deps/Core-x86-Disassembler
+git commit -m "chore: sync Core-x86-Disassembler to latest version"
 git push
 ```
 
-也可以在原始 PETools 目录开发并推送，再在各应用里执行最后的 fetch、checkout、测试和提交步骤。必须先推送库提交，再推送引用它的应用；否则别人无法下载依赖。
+> **懒人快捷命令**：第 2 步也可以简化成一句命令：
+> ```bash
+> git submodule update --remote --merge deps/Core-x86-Disassembler
+> ```
+> 执行完后再运行第 3 步（编译测试）和第 4 步（`git add` -> `git commit` -> `git push`）即可。
 
-子模块通常处于 detached HEAD，这是按提交锁定依赖的正常状态；编辑前创建分支。父仓库的 `git add deps/PETools` 只记录库的提交号，不会替你提交库内文件。
+---
 
-## 拉取与升级的区别
+## 场景二：你想直接在 `TinyX86/deps/Core-x86-Disassembler` 文件夹里边调试边改代码
 
-```powershell
-# 获取应用已验证的依赖版本
-git pull --ff-only
-git submodule update --init --recursive
+如果你在写 `TinyX86` 时发现解码器有个小 Bug，想直接改 `deps/Core-x86-Disassembler` 里的文件，**千万注意先切到 `main` 分支再改**（因为子模块默认处于“游离头指针 detached HEAD”状态）：
 
-# 查看当前依赖提交
-git submodule status --recursive
+```bash
+# 1. 进入子模块目录并切换到 main 分支（同时拉取最新代码）
+cd deps/Core-x86-Disassembler
+git checkout main
+git pull
 
-# 有意升级到 PETools 的最新主分支（升级后必须重新构建和测试）
-git -C deps/PETools fetch origin
-git -C deps/PETools checkout origin/main
-git add deps/PETools
-git commit -m "chore: update PETools dependency"
+# 2. 修改 disasm.c / disasm.h 代码后，先在子模块里提交并推送到 Core-x86-Disassembler 仓库
+git add .
+git commit -m "fix: support new opcode in disassembler"
+git push origin main
+
+# 3. 退回 TinyX86 根目录，把新的子模块书签提交到 TinyX86 仓库
+cd ../..
+git add deps/Core-x86-Disassembler
+git commit -m "chore: update Core-x86-Disassembler submodule"
 git push
 ```
 
-不要把 `git submodule update --remote` 当作普通同步命令，它可能改变已锁定的版本。
+> **重要铁律**：如果在 `deps/` 里改了代码，**一定要先 `push` 子模块，再 `push` 父仓库 `TinyX86`**。如果只推了父仓库而忘了推子模块，别人（或 GitHub Actions CI）克隆 `TinyX86` 时就会报错“找不到对应的子模块提交号”。
 
-## 构建环境
+---
 
-当前完整应用和 PETools 支持 Windows x86/PE32；使用 Visual Studio 的 x86（MSBuild 名称 `Win32`）配置。代码中仍有指针与 `DWORD`/`uint32_t` 转换，不能把选择 x64 配置当作完成了 64 位移植。解码结构里的 `mode64` 也不代表完整支持 x86-64。
+## 场景三：换了一台新电脑，怎么完整下载 `TinyX86` 和所有子模块？
 
-原生项目默认使用本机已有的 v145 工具集、Windows 10 SDK；安装了 v143 的 Visual Studio 2022 可用命令行 `/p:PlatformToolset=v143` 覆盖。CMake 通过所选生成器选工具集。PEViewer 的当前可复现配置统一为现代工具集；原来混用的 XP Release 配置需作为后续单独兼容工作处理。
+- **情况 A：还没克隆**
+  加上 `--recurse-submodules` 参数，一条命令把主仓库和 `deps/` 里的两个库全部拉下来：
+  ```bash
+  git clone --recurse-submodules https://github.com/582835293/TinyX86.git
+  ```
+- **情况 B：已经普通 `git clone` 下来了，发现 `deps/` 文件夹是空的**
+  在 `TinyX86` 根目录下运行：
+  ```bash
+  git submodule update --init --recursive
+  ```
 
-## 迁移记录
+---
 
-- 保留 TinyX86 和解码器的已有 Git 历史，以及迁移前 TinyX86 的未提交代码内容。
-- 将 TinyX86 的 `instr_len` 字段与赋值、ENTER 指令组表修正合回解码器；保留原引擎的解析辅助函数接口。
-- PETools 使用原始 `初级班/PE/PETools` 的完整实现；与 TinyX86 副本有效代码一致，包含 PEViewer 所用的字符串输出接口。
-- PETools 头文件的 `tempBuf` 改为 `extern`，由源文件提供唯一定义，支持 C/C++ 跨编译单元链接；统一 Unicode 与 UTF-8 构建。
-- 从应用中移除六个共享源码副本，以子模块和静态库引用取代。
-- PEViewer 的图标纳入 `assets/`；缺失的小图标暂复用现有主图标，去除桌面绝对路径。
-- 新增 CMake、Windows CI 和真实共享解码器的 CPU 集成测试；原 Google Test 工程仍保留。
+## 附：关于内置跨平台 `include/disasm.h` 与 `core/disasm.c` 的说明
 
-参考：[Git 官方子模块文档](https://git-scm.com/book/en/v2/Git-Tools-Submodules)、[Microsoft C++ 项目结构](https://learn.microsoft.com/en-us/cpp/build/reference/vcxproj-file-structure)。
+为了保证在没有初始化子模块、或者在 Linux / macOS 64 位环境下也能开箱编译，`TinyX86` 在 `include/disasm.h` 和 `core/disasm.c` 中保留了一份内置的跨平台解码实现：
+- 当你在 **32 位 Windows** 下且拉取了 `deps/Core-x86-Disassembler` 子模块时，CMake（`TINYX86_USE_SUBMODULES=ON`）会**自动优先使用 `deps/Core-x86-Disassembler` 子模块**。
+- 如果你修改了 `Core-x86-Disassembler` 中的 `DecodeContext` 结构体字段或新增了指令，也可以同步更新 `include/disasm.h` 与 `core/disasm.c`，使 Linux / macOS 跨平台构建同步受益。

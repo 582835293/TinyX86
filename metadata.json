@@ -1,0 +1,5 @@
+{
+  "name": "TinyX86 Emulator & Debugger",
+  "description": "x86-32 CPU & x87 FPU instruction subset emulator, PE32/binary loader, and interactive debugger ported from TinyX86.",
+  "requestFramePermissions": []
+}

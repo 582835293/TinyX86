@@ -1,18 +1,63 @@
-name: Windows x86
-on: [push, pull_request, workflow_dispatch]
+name: Cross-Platform CI (Windows / Linux / macOS)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
 jobs:
-  build:
-    runs-on: windows-latest
+  cmake-matrix:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu Linux (GCC)
+            os: ubuntu-latest
+            cc: gcc
+            cmake_args: ""
+          - name: Ubuntu Linux (Clang)
+            os: ubuntu-latest
+            cc: clang
+            cmake_args: ""
+          - name: macOS (Apple Clang)
+            os: macos-latest
+            cc: clang
+            cmake_args: ""
+          - name: Windows x86 (Win32 MSVC)
+            os: windows-latest
+            cc: cl
+            cmake_args: "-A Win32"
+          - name: Windows x64 (MSVC)
+            os: windows-latest
+            cc: cl
+            cmake_args: "-A x64"
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: microsoft/setup-msbuild@v2
-      - name: Build native Visual Studio project
-        run: msbuild "TinyX86.vcxproj" /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /v:minimal
-      - name: Configure
-        run: cmake -S . -B build-ci -A Win32
-      - name: Build
+
+      - name: Configure CMake
+        env:
+          CC: ${{ matrix.cc }}
+        run: cmake -S . -B build-ci ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build TinyX86 & Tests
         run: cmake --build build-ci --config Release --parallel
-      - name: Test
+
+      - name: Run Integration Tests (CTest)
         run: ctest --test-dir build-ci -C Release --output-on-failure
+
+  web-debugger:
+    name: Web Debugger Build (Node.js 22)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run build
