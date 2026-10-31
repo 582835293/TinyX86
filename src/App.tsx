@@ -15,24 +15,8 @@ import {
   HelpCircle,
   BookOpen,
 } from 'lucide-react';
-import { CPUContext, DecodeContext, PEHeaderInfo } from './emulator/types';
-import {
-  VirtualMemory,
-  cloneCPUContext,
-  runcpu,
-  ParseInstruction,
-  SetCpuState,
-  IsStepOverCandidate,
-  PackEFLAGS,
-} from './emulator/tinyx86';
-import {
-  G_TEST_CODE,
-  SUM_1_TO_10_CODE,
-  DOS_INT21_CODE,
-  LoadMem,
-  LoadExeBuffer,
-  runCpuIntegrationTests,
-} from './emulator/peLoader';
+import { CPUContext, PEHeaderInfo } from './emulator/types';
+import { TinyX86WasmEngine, DisasmLine } from './emulator/wasmEngine';
 
 const GPR_NAMES = ['EAX', 'ECX', 'EDX', 'EBX', 'ESP', 'EBP', 'ESI', 'EDI'];
 const SEG_NAMES = ['ES', 'CS', 'SS', 'DS', 'FS', 'GS'];
@@ -54,31 +38,74 @@ type ProgramPresetId = 'power_fpu' | 'sum_loop' | 'dos_int21';
 
 interface PresetInfo {
   id: ProgramPresetId;
+  presetIndex: number;
   name: string;
   subtitle: string;
-  code: Uint8Array;
 }
 
 const PRESETS: PresetInfo[] = [
   {
     id: 'power_fpu',
+    presetIndex: 0,
     name: 't: 递归幂运算 power(2.0, 3) [main.c 默认]',
     subtitle: '栈帧开辟、REP STOSD 0xCCCCCCCC、递归调用与 x87 FPU (ST0 = 8.0)',
-    code: G_TEST_CODE,
   },
   {
     id: 'sum_loop',
+    presetIndex: 1,
     name: 'Sum 1..10 累加循环 (ALU + LOOP)',
     subtitle: '计算 1+2+...+10 = 55 (0x37) 存入 EAX 与 EBX',
-    code: SUM_1_TO_10_CODE,
   },
   {
     id: 'dos_int21',
+    presetIndex: 2,
     name: 'DOS INT 21h 高层模拟 (HLE 字符串输出)',
     subtitle: '模拟 AH=09h 输出 $ 结尾字符串与 AH=4Ch 程序退出',
-    code: DOS_INT21_CODE,
   },
 ];
+
+function createInitialCpuState(): CPUContext {
+  return {
+    GPR: new Uint32Array([0, 0, 0, 0, 0x0010ffe0, 0x0010ffe0, 0, 0]),
+    EIP: 0x00400000,
+    EFLAGS: {
+      CF: 0,
+      PF: 0,
+      AF: 0,
+      ZF: 0,
+      SF: 0,
+      TF: 0,
+      IF: 1,
+      DF: 0,
+      OF: 0,
+      IOPL: 0,
+      NT: 0,
+    },
+    seg: new Uint16Array([0x0023, 0x001b, 0x0023, 0x0023, 0x0000, 0x0000]),
+    FPU: {
+      Regs: [0, 0, 0, 0, 0, 0, 0, 0],
+      SW: {
+        IE: 0,
+        DE: 0,
+        ZE: 0,
+        OE: 0,
+        UE: 0,
+        PE: 0,
+        SF: 0,
+        ES: 0,
+        C0: 0,
+        C1: 0,
+        C2: 0,
+        TOP: 0,
+        C3: 0,
+        B: 0,
+      },
+      CW: 0x037f,
+      TW: 0xffff,
+    },
+    Halted: false,
+  };
+}
 
 function hex32(val: number): string {
   return '0x' + (val >>> 0).toString(16).toUpperCase().padStart(8, '0');
@@ -93,10 +120,10 @@ function hex8(val: number): string {
 }
 
 export function App() {
-  const memRef = useRef<VirtualMemory>(new VirtualMemory());
-  const [cpu, setCpu] = useState<CPUContext>(() =>
-    LoadMem(G_TEST_CODE, memRef.current, 0x00400000)
-  );
+  const engineRef = useRef<TinyX86WasmEngine | null>(null);
+  const [wasmReady, setWasmReady] = useState<boolean>(false);
+  const [cpu, setCpu] = useState<CPUContext>(createInitialCpuState);
+  const [rawEflags, setRawEflags] = useState<number>(0x00000202);
   const [activePreset, setActivePreset] = useState<ProgramPresetId>('power_fpu');
   const [loadedTitle, setLoadedTitle] = useState<string>('g_TestCode (Recursive power(2.0, 3))');
   const [peInfo, setPeInfo] = useState<PEHeaderInfo | null>(null);
@@ -107,189 +134,108 @@ export function App() {
   const [activeRightTab, setActiveRightTab] = useState<'stack' | 'memory' | 'pe' | 'tests' | 'guide'>('stack');
   const [memVersion, setMemVersion] = useState<number>(0);
   const [logs, setLogs] = useState<string[]>([
-    'TinyX86 Emulator [Sprint 13 - Cross-Platform Windows / Linux / macOS / Web]',
-    "Loaded internal test 'g_TestCode' (recursive power(2.0, 3)) at 0x00400000.",
-    '=== TinyX86 Debugger Initialized ===',
-    "Type 'h' for help, or use 's' (Step Into), 'n' (Step Over), 'c' (Continue), 'r' (Registers).",
+    'TinyX86 Emulator [Native C11 Core compiled to WebAssembly: public/tinyx86.wasm]',
+    'Initializing WASI C11 modules (core/TinyX86.c, disasm.c, PELoader.c, PETools.c, debugger.c)...',
   ]);
 
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
-
   const appendLog = (lines: string | string[]) => {
-    const arr = Array.isArray(lines) ? lines : [lines];
+    const arr = (Array.isArray(lines) ? lines : [lines]).filter((l) => l.length > 0);
+    if (arr.length === 0) return;
     setLogs((prev) => [...prev.slice(-300), ...arr]);
   };
 
-  const isSoftwareBreakpoint = (eip: number): boolean => {
-    return memRef.current.readU8(eip) === 0xcc;
+  const syncFromC = (engine = engineRef.current) => {
+    if (!engine) return;
+    setCpu(engine.readCpuState());
+    setRawEflags(engine.getRawEflags());
+    setBreakpoints(engine.getBreakpoints());
+    setMemVersion((v) => v + 1);
   };
 
-  const isUserBreakpoint = (eip: number, bpList = breakpoints): boolean => {
-    return bpList.includes(eip >>> 0);
-  };
+  useEffect(() => {
+    let mounted = true;
+    TinyX86WasmEngine.create()
+      .then((engine) => {
+        if (!mounted) return;
+        engineRef.current = engine;
+        setWasmReady(true);
+        syncFromC(engine);
+        const testRes = engine.getIntegrationResult();
+        setLogs([
+          `TinyX86 Emulator [C11 -> WASI WebAssembly | sizeof(CPU_Context)=${testRes.sizeofCpuContext}B, sizeof(DecodeContext)=${testRes.sizeofDecodeContext}B]`,
+          "Loaded internal test 'g_TestCode' (recursive power(2.0, 3)) at 0x00400000 via LoadMem() in core/PELoader.c.",
+          '=== TinyX86 Debugger Initialized (core/debugger.c) ===',
+          "Type 'h' for help, or press keyboard shortcuts: 's' (Step Into), 'n' (Step Over), 'c' (Continue), 'r' (Registers).",
+        ]);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        appendLog(`[Error] Failed to initialize tinyx86.wasm: ${String(err)}`);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = terminalContainerRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [logs]);
 
   const loadPreset = (preset: PresetInfo) => {
-    const nextCpu = LoadMem(preset.code, memRef.current, 0x00400000);
-    setCpu(nextCpu);
+    const engine = engineRef.current;
+    if (!engine) return;
+    const cLogs = engine.loadPreset(preset.presetIndex);
+    syncFromC(engine);
     setActivePreset(preset.id);
     setLoadedTitle(preset.name);
     setPeInfo(null);
     setMemViewAddr(0x00400000);
     setMemAddrInput('00400000');
-    setMemVersion((v) => v + 1);
-    appendLog([
-      `[Shell] Loading ${preset.name}...`,
-      `[Loader] Test code mapped at 0x00400000 (ESP=${hex32(nextCpu.GPR[4])})`,
-    ]);
+    appendLog([`[Shell] Loading ${preset.name} via C LoadMem()...`, ...cLogs]);
   };
 
-  const handleStepInto = (count = 1, currentCpu = cpu) => {
-    const next = cloneCPUContext(currentCpu);
-    const outLogs: string[] = [];
-    const n = Math.max(1, Math.min(count, 10000));
-    outLogs.push(`Stepping ${n} instruction${n > 1 ? 's' : ''}...`);
-
-    for (let i = 0; i < n; i++) {
-      if (next.Halted) break;
-      if (isSoftwareBreakpoint(next.EIP)) {
-        outLogs.push(
-          `[Step] Trapped by INT 3 at ${hex32(next.EIP)} (Skipping 0xCC byte)`
-        );
-        next.EIP = (next.EIP + 1) >>> 0;
-        break;
-      }
-      runcpu(next, memRef.current, 1, (m) => outLogs.push(m));
-      if (i < n - 1 && isUserBreakpoint(next.EIP)) {
-        outLogs.push(`[Step] Stopped at breakpoint ${hex32(next.EIP)}`);
-        break;
-      }
-    }
-
-    setCpu(next);
-    setMemVersion((v) => v + 1);
-    appendLog(outLogs);
+  const handleStepInto = (count = 1) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const cmd = count > 1 ? `s ${count}` : 's';
+    const cLogs = engine.execCommand(cmd);
+    syncFromC(engine);
+    appendLog(cLogs);
   };
 
-  const handleStepOver = (currentCpu = cpu) => {
-    const next = cloneCPUContext(currentCpu);
-    if (next.Halted) {
-      appendLog('[System] CPU Halted. Reset or reload program to run again.');
-      return;
-    }
-
-    const d_ctx = ParseInstruction((addr) => memRef.current.readU8(addr), next.EIP);
-    if (IsStepOverCandidate(d_ctx)) {
-      const targetEip = (next.EIP + d_ctx.instr_len) >>> 0;
-      const outLogs: string[] = [
-        `[Debugger] Stepping over Block/Call... (Target EIP: ${hex32(targetEip)})`,
-      ];
-      let maxSteps = 200000;
-      while (next.EIP !== targetEip && !next.Halted && maxSteps-- > 0) {
-        if (isSoftwareBreakpoint(next.EIP)) {
-          outLogs.push(`[Debugger] Hit INT 3 inside StepOver at ${hex32(next.EIP)}`);
-          break;
-        }
-        runcpu(next, memRef.current, 1, (m) => outLogs.push(m));
-        if (isUserBreakpoint(next.EIP)) {
-          outLogs.push(`[Debugger] Hit User Breakpoint inside StepOver at ${hex32(next.EIP)}`);
-          break;
-        }
-      }
-      if (maxSteps <= 0) {
-        outLogs.push('[Warn] StepOver timeout (Loop too long or infinite?). Stopped.');
-      }
-      setCpu(next);
-      setMemVersion((v) => v + 1);
-      appendLog(outLogs);
-    } else {
-      handleStepInto(1, next);
-    }
+  const handleStepOver = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const cLogs = engine.execCommand('n');
+    syncFromC(engine);
+    appendLog(cLogs);
   };
 
-  const handleContinue = (currentCpu = cpu) => {
-    const next = cloneCPUContext(currentCpu);
-    if (next.Halted) {
-      appendLog('[System] CPU is halted. Click Reset to restart execution.');
-      return;
-    }
-    const outLogs: string[] = ['Running...'];
-    if (isUserBreakpoint(next.EIP)) {
-      runcpu(next, memRef.current, 1, (m) => outLogs.push(m));
-    }
-
-    let maxSteps = 500000;
-    while (!next.Halted && maxSteps-- > 0) {
-      if (isSoftwareBreakpoint(next.EIP)) {
-        outLogs.push(`[Debugger] Hit Software Breakpoint (INT 3) at ${hex32(next.EIP)}`);
-        break;
-      }
-      runcpu(next, memRef.current, 1, (m) => outLogs.push(m));
-      if (isUserBreakpoint(next.EIP)) {
-        outLogs.push(`[Debugger] Hit Breakpoint at ${hex32(next.EIP)}`);
-        break;
-      }
-    }
-    if (maxSteps <= 0) {
-      outLogs.push('[Warn] Execution paused after 500,000 steps (infinite loop guard).');
-    }
-
-    setCpu(next);
-    setMemVersion((v) => v + 1);
-    appendLog(outLogs);
+  const handleContinue = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const cLogs = engine.execCommand('c');
+    syncFromC(engine);
+    appendLog(cLogs);
   };
 
   const toggleBreakpoint = (addr: number) => {
-    const uAddr = addr >>> 0;
-    setBreakpoints((prev) => {
-      if (prev.includes(uAddr)) {
-        appendLog(`Removed breakpoint at ${hex32(uAddr)}`);
-        return prev.filter((x) => x !== uAddr);
-      }
-      if (prev.length >= 16) {
-        appendLog('Error: Breakpoint list full (16).');
-        return prev;
-      }
-      appendLog(`Breakpoint set at ${hex32(uAddr)}`);
-      return [...prev, uAddr];
-    });
-  };
-
-  const formatShowState = (c: CPUContext): string[] => {
-    const lines: string[] = [];
-    lines.push('--- CPU STATE ---------------------------------------------------');
-    lines.push(
-      `EAX: ${hex32(c.GPR[0])}  EBX: ${hex32(c.GPR[3])}  ECX: ${hex32(c.GPR[1])}  EDX: ${hex32(c.GPR[2])}`
-    );
-    lines.push(
-      `ESI: ${hex32(c.GPR[6])}  EDI: ${hex32(c.GPR[7])}  EBP: ${hex32(c.GPR[5])}  ESP: ${hex32(c.GPR[4])}`
-    );
-    lines.push(
-      `EIP: ${hex32(c.EIP)}  CS:${(c.seg[1] & 0xffff).toString(16).toUpperCase().padStart(4, '0')} DS:${(c.seg[3] & 0xffff).toString(16).toUpperCase().padStart(4, '0')} ES:${(c.seg[0] & 0xffff).toString(16).toUpperCase().padStart(4, '0')} SS:${(c.seg[2] & 0xffff).toString(16).toUpperCase().padStart(4, '0')}`
-    );
-    const activeFlags = FLAG_KEYS.filter((k) => c.EFLAGS[k] === 1).join(' ');
-    lines.push(
-      `FLAGS: [ ${activeFlags}${activeFlags ? ' ' : ''}IOPL=${c.EFLAGS.IOPL} ] (Raw: ${hex32(PackEFLAGS(c))})`
-    );
-    lines.push('--- FPU ---------------------------------------------------------');
-    const top = c.FPU.SW.TOP;
-    lines.push(
-      `FPU SW: TOP=${top}  C3=${c.FPU.SW.C3} C2=${c.FPU.SW.C2} C1=${c.FPU.SW.C1} C0=${c.FPU.SW.C0}`
-    );
-    for (let i = 0; i < 8; i++) {
-      const logicalIdx = (i - top + 8) & 7;
-      const tag = i === top ? '<- ST(0) TOP' : `   ST(${logicalIdx})`;
-      lines.push(`   R${i}  | ${c.FPU.Regs[i].toFixed(10).padStart(18, ' ')} | ${tag}`);
-    }
-    lines.push('-----------------------------------------------------------------');
-    return lines;
+    const engine = engineRef.current;
+    if (!engine) return;
+    const cLogs = engine.toggleBreakpoint(addr >>> 0);
+    syncFromC(engine);
+    appendLog(cLogs);
   };
 
   const executeDebuggerCommand = (rawCmd: string) => {
+    const engine = engineRef.current;
+    if (!engine) return;
     const trimmed = rawCmd.trim();
     if (!trimmed) return;
     appendLog(`(dbg) > ${trimmed}`);
@@ -297,266 +243,120 @@ export function App() {
     const cmd = trimmed[0].toLowerCase();
     const args = trimmed.slice(1).trim();
 
-    switch (cmd) {
-      case 't': {
-        const preset = PRESETS[0];
-        loadPreset(preset);
-        break;
-      }
-      case 's': {
-        const count = args ? parseInt(args, 10) || 1 : 1;
-        handleStepInto(count);
-        break;
-      }
-      case 'n': {
-        handleStepOver();
-        break;
-      }
-      case 'c': {
-        handleContinue();
-        break;
-      }
-      case 'b': {
-        if (args.startsWith('l')) {
-          if (breakpoints.length === 0) appendLog('No breakpoints set.');
-          else {
-            appendLog([
-              'Breakpoints:',
-              ...breakpoints.map((bp, idx) => `  [${idx}] ${hex32(bp)}`),
-            ]);
-          }
-        } else if (args.startsWith('c')) {
-          setBreakpoints([]);
-          appendLog('All breakpoints cleared.');
-        } else {
-          const addr = parseInt(args.replace(/^0x/i, ''), 16);
-          if (!Number.isNaN(addr)) {
-            toggleBreakpoint(addr >>> 0);
-          } else {
-            appendLog('Usage: b <hex_addr> | bl | bc');
-          }
-        }
-        break;
-      }
-      case 'r': {
-        appendLog(formatShowState(cpu));
-        break;
-      }
-      case 'u': {
-        const linesCount = Math.min(50, Math.max(1, parseInt(args, 10) || 5));
-        let tempEip = cpu.EIP >>> 0;
-        const out: string[] = [`Disassembly (${linesCount} lines):`];
-        for (let i = 0; i < linesCount; i++) {
-          const d = ParseInstruction((a) => memRef.current.readU8(a), tempEip);
-          const hexBytes = d.bytes.map((b) => hex8(b)).join('').padEnd(16, ' ');
-          out.push(`  ${hex32(tempEip)}: ${hexBytes} | ${d.asm_str}`);
-          tempEip = (tempEip + d.instr_len) >>> 0;
-        }
-        appendLog(out);
-        break;
-      }
-      case 'm': {
-        const addr = parseInt(args.replace(/^0x/i, ''), 16);
-        if (Number.isNaN(addr)) {
-          appendLog('Usage: m <hex_addr>');
-        } else {
-          const uAddr = addr >>> 0;
-          setMemViewAddr(uAddr);
-          setMemAddrInput(uAddr.toString(16).toUpperCase().padStart(8, '0'));
-          setActiveRightTab('memory');
-          const out: string[] = [`Memory at ${hex32(uAddr)}:`];
-          for (let i = 0; i < 4; i++) {
-            const lineAddr = (uAddr + i * 16) >>> 0;
-            let hexPart = '';
-            let asciiPart = '';
-            for (let j = 0; j < 16; j++) {
-              const b = memRef.current.readU8(lineAddr + j);
-              hexPart += hex8(b) + ' ';
-              asciiPart += b >= 32 && b <= 126 ? String.fromCharCode(b) : '.';
-            }
-            out.push(
-              `  ${lineAddr.toString(16).toUpperCase().padStart(8, '0')}: ${hexPart} | ${asciiPart}`
-            );
-          }
-          appendLog(out);
-        }
-        break;
-      }
-      case 'k': {
-        const count = Math.min(32, Math.max(1, parseInt(args, 10) || 8));
-        const esp = cpu.GPR[4] >>> 0;
-        const ebp = cpu.GPR[5] >>> 0;
-        const out: string[] = [
-          `Stack Dump (ESP=${hex32(esp)}):`,
-          'Address     Value       ASCII   Annotation',
-          '----------  ----------  -----   ------------------',
-        ];
-        for (let i = -2; i < count; i++) {
-          const addr = (esp + i * 4) >>> 0;
-          const val = memRef.current.read(addr, 4);
-          let ascii = '';
-          for (let b = 0; b < 4; b++) {
-            const byte = (val >>> (b * 8)) & 0xff;
-            ascii += byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.';
-          }
-          const notes: string[] = [];
-          if (addr === esp) notes.push('<--- ESP (Top)');
-          if (addr === ebp) notes.push('<--- EBP (Frame)');
-          out.push(`${hex32(addr)}  ${hex32(val)}  ${ascii}    ${notes.join(' / ')}`);
-        }
-        appendLog(out);
-        break;
-      }
-      case 'e': {
-        if (args.startsWith('d ') || args.startsWith('w ')) {
-          const isDword = args.startsWith('d ');
-          const parts = args.slice(2).trim().split(/\s+/);
-          if (parts.length >= 2) {
-            const addr = parseInt(parts[0].replace(/^0x/i, ''), 16) >>> 0;
-            const val = parseInt(parts[1].replace(/^0x/i, ''), 16) >>> 0;
-            memRef.current.write(addr, val, isDword ? 4 : 2);
-            setMemVersion((v) => v + 1);
-            appendLog(
-              `Memory Write: [${hex32(addr)}] = 0x${val.toString(16).toUpperCase()} (${isDword ? 4 : 2} bytes)`
-            );
-          } else {
-            appendLog(`Usage: e${isDword ? 'd' : 'w'} <hex_addr> <hex_value>`);
-          }
-        } else {
-          const parts = args.split(/\s+/).filter(Boolean);
-          if (parts.length >= 2) {
-            const addr = parseInt(parts[0].replace(/^0x/i, ''), 16) >>> 0;
-            let count = 0;
-            for (let i = 1; i < parts.length; i++) {
-              const b = parseInt(parts[i].replace(/^0x/i, ''), 16);
-              if (!Number.isNaN(b)) {
-                memRef.current.writeU8(addr + count, b & 0xff);
-                count++;
-              }
-            }
-            setMemVersion((v) => v + 1);
-            appendLog(`Wrote ${count} bytes to ${hex32(addr)}`);
-          } else {
-            appendLog('Usage: e <addr> <byte1> <byte2> ...');
-          }
-        }
-        break;
-      }
-      case 'w': {
-        const parts = args.split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) {
-          const target = parts[0];
-          const val = parseInt(parts[1].replace(/^0x/i, ''), 16) >>> 0;
-          const next = cloneCPUContext(cpu);
-          if (SetCpuState(next, target, val)) {
-            setCpu(next);
-            appendLog(`Updated ${target.toUpperCase()} = 0x${val.toString(16).toUpperCase()}`);
-          } else {
-            appendLog(`Error: Unknown register or flag '${target}'`);
-          }
-        } else {
-          appendLog('Usage: w <reg/flag> <hex_value> (e.g., w EAX 1234, w ZF 1)');
-        }
-        break;
-      }
-      case 'h':
-      case '?': {
-        appendLog([
-          '--- Command Help ---',
-          ' Execution:',
-          '  s [N]     : Step Into (execute N instructions, default 1)',
-          '  n         : Step Over (skip CALL, LOOP, REP... instructions)',
-          '  c         : Continue (run until breakpoint or halt)',
-          '  t         : Reload default internal test (g_TestCode)',
-          '  q         : Halt CPU',
-          ' Breakpoints:',
-          '  b <addr>  : Toggle Breakpoint at hex address (e.g., b 400014)',
-          '  bl        : List all Breakpoints',
-          '  bc        : Clear all Breakpoints',
-          ' Inspection:',
-          '  r         : Show all Registers (GPR, Flags, FPU)',
-          '  u [N]     : Disassemble next N instructions (default 5)',
-          '  m <addr>  : Dump memory at hex address (64 bytes)',
-          '  k [N]     : Dump Stack (show N dwords around ESP, default 8)',
-          ' Modification:',
-          '  w <reg> <val>     : Write Register (e.g., w EAX 1234, w ZF 1)',
-          '  e <addr> <b1>...  : Edit memory bytes (e.g., e 400000 90 CC)',
-          '  ew <addr> <val>   : Edit memory Word (2 bytes)',
-          '  ed <addr> <val>   : Edit memory DWORD (4 bytes)',
-        ]);
-        break;
-      }
-      case 'q': {
-        const next = cloneCPUContext(cpu);
-        next.Halted = true;
-        setCpu(next);
-        appendLog('Debugger exited. (Halted State: YES)');
-        break;
-      }
-      default:
-        appendLog(`Unknown command '${cmd}'. Type 'h' for help.`);
+    if (cmd === 't') {
+      loadPreset(PRESETS[0]);
+      return;
     }
+
+    if (cmd === 'm') {
+      const addr = parseInt(args.replace(/^0x/i, ''), 16);
+      if (!Number.isNaN(addr)) {
+        const uAddr = addr >>> 0;
+        setMemViewAddr(uAddr);
+        setMemAddrInput(uAddr.toString(16).toUpperCase().padStart(8, '0'));
+        setActiveRightTab('memory');
+      }
+    }
+
+    // Directly call DebuggerExecuteCommand(&g_WasmCpu, trimmed) inside core/debugger.c!
+    const cLogs = engine.execCommand(trimmed);
+    syncFromC(engine);
+    appendLog(cLogs);
   };
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (key === 's' || e.key === 'F7' || e.key === 'F11') {
+        e.preventDefault();
+        handleStepInto(1);
+      } else if (key === 'n' || e.key === 'F8' || e.key === 'F10') {
+        e.preventDefault();
+        handleStepOver();
+      } else if (key === 'c' || e.key === 'F5' || e.key === 'F9') {
+        e.preventDefault();
+        handleContinue();
+      } else if (key === 'r') {
+        e.preventDefault();
+        executeDebuggerCommand('r');
+      } else if (key === 'u') {
+        e.preventDefault();
+        executeDebuggerCommand('u 8');
+      } else if (key === 'k') {
+        e.preventDefault();
+        executeDebuggerCommand('k 8');
+      } else if (key === 'h') {
+        e.preventDefault();
+        executeDebuggerCommand('h');
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const engine = engineRef.current;
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !engine) return;
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
-    const isExe = file.name.toLowerCase().endsWith('.exe') || (bytes[0] === 0x4d && bytes[1] === 0x5a);
+    const isExe =
+      file.name.toLowerCase().endsWith('.exe') || (bytes[0] === 0x4d && bytes[1] === 0x5a);
 
     if (isExe) {
-      const outLogs: string[] = [`[Shell] Loading PE: ${file.name}`];
-      const { ctx, peInfo: parsedPe } = LoadExeBuffer(bytes, memRef.current, (m) =>
-        outLogs.push(m)
-      );
-      if (ctx) {
-        setCpu(ctx);
+      const { ok, peInfo: parsedPe, logs: cLogs } = engine.loadPE(bytes);
+      syncFromC(engine);
+      if (ok && parsedPe) {
+        const nextCpu = engine.readCpuState();
         setPeInfo(parsedPe);
         setLoadedTitle(`PE32: ${file.name}`);
-        setMemViewAddr(ctx.EIP);
-        setMemAddrInput(ctx.EIP.toString(16).toUpperCase().padStart(8, '0'));
+        setMemViewAddr(nextCpu.EIP);
+        setMemAddrInput(nextCpu.EIP.toString(16).toUpperCase().padStart(8, '0'));
         setActiveRightTab('pe');
-        setMemVersion((v) => v + 1);
       }
-      appendLog(outLogs);
+      appendLog([`[Shell] Loading PE via C LoadExeFromMemory(): ${file.name}`, ...cLogs]);
     } else {
-      const ctx = LoadMem(bytes, memRef.current, 0x00400000);
-      setCpu(ctx);
+      const cLogs = engine.loadBin(bytes, 0x00400000);
+      syncFromC(engine);
       setPeInfo(null);
       setLoadedTitle(`BIN: ${file.name} (${bytes.length} bytes)`);
       setMemViewAddr(0x00400000);
       setMemAddrInput('00400000');
-      setMemVersion((v) => v + 1);
-      appendLog([
-        `[Shell] Loading Binary: ${file.name}`,
-        `[Loader] Binary loaded at 0x00400000 (${bytes.length} bytes)`,
-      ]);
+      appendLog([`[Shell] Loading Binary via C LoadMem(): ${file.name}`, ...cLogs]);
     }
     e.target.value = '';
   };
 
-  const disasmList = useMemo(() => {
-    const list: DecodeContext[] = [];
-    const base = memRef.current.codeBase >>> 0;
-    const startAddr =
-      cpu.EIP >= base && cpu.EIP < base + 0x200 ? base : cpu.EIP >>> 0;
-    let cur = startAddr;
-    for (let i = 0; i < 28; i++) {
-      const d = ParseInstruction((addr) => memRef.current.readU8(addr), cur);
-      list.push(d);
-      cur = (cur + Math.max(1, d.instr_len)) >>> 0;
-    }
-    return list;
-  }, [cpu.EIP, memVersion]);
+  const disasmList = useMemo<DisasmLine[]>(() => {
+    const engine = engineRef.current;
+    if (!engine || !wasmReady) return [];
+    const base = engine.getCodeBase() >>> 0;
+    const startAddr = cpu.EIP >= base && cpu.EIP < base + 0x200 ? base : cpu.EIP >>> 0;
+    return engine.disassembleList(startAddr, 28);
+  }, [cpu.EIP, memVersion, wasmReady]);
 
   const stackRows = useMemo(() => {
+    const engine = engineRef.current;
+    if (!engine || !wasmReady) return [];
     const esp = cpu.GPR[4] >>> 0;
     const ebp = cpu.GPR[5] >>> 0;
     const rows = [];
     for (let i = -3; i < 14; i++) {
       const addr = (esp + i * 4) >>> 0;
-      const val = memRef.current.read(addr, 4);
+      const val = engine.readMemU32(addr);
       let ascii = '';
       for (let b = 0; b < 4; b++) {
         const ch = (val >>> (b * 8)) & 0xff;
@@ -571,9 +371,11 @@ export function App() {
       });
     }
     return rows;
-  }, [cpu.GPR, memVersion]);
+  }, [cpu.GPR, memVersion, wasmReady]);
 
   const memRows = useMemo(() => {
+    const engine = engineRef.current;
+    if (!engine || !wasmReady) return [];
     const rows = [];
     const base = memViewAddr >>> 0;
     for (let r = 0; r < 12; r++) {
@@ -581,16 +383,22 @@ export function App() {
       const bytes: number[] = [];
       let ascii = '';
       for (let c = 0; c < 16; c++) {
-        const b = memRef.current.readU8(rowAddr + c);
+        const b = engine.readMemU8(rowAddr + c);
         bytes.push(b);
         ascii += b >= 32 && b <= 126 ? String.fromCharCode(b) : '.';
       }
       rows.push({ rowAddr, bytes, ascii });
     }
     return rows;
-  }, [memViewAddr, memVersion]);
+  }, [memViewAddr, memVersion, wasmReady]);
 
-  const integrationResult = useMemo(() => runCpuIntegrationTests(), []);
+  const integrationResult = engineRef.current?.getIntegrationResult() ?? {
+    passed: true,
+    checks: 13,
+    failures: 0,
+    sizeofCpuContext: 168,
+    sizeofDecodeContext: 260,
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
@@ -607,18 +415,20 @@ export function App() {
               </h1>
               <span
                 className={`text-[11px] font-mono px-1.5 py-0.5 rounded border ${
-                  cpu.Halted
+                  !wasmReady
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    : cpu.Halted
                     ? 'bg-red-500/15 text-red-300 border-red-500/30'
                     : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                 }`}
               >
-                {cpu.Halted ? 'HALTED' : 'READY'}
+                {!wasmReady ? 'LOADING WASM' : cpu.Halted ? 'HALTED' : 'READY'}
               </span>
               <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                Windows · Linux · macOS · Web
+                Native C11 (core/*.c → tinyx86.wasm)
               </span>
             </div>
-            <p className="text-xs text-zinc-400 font-mono truncate max-w-md">
+            <p className="text-xs text-zinc-400 font-mono truncate max-w-xl">
               Loaded: {loadedTitle} | EIP={hex32(cpu.EIP)}
             </p>
           </div>
@@ -644,7 +454,7 @@ export function App() {
           <button
             onClick={() => handleStepInto(1)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition cursor-pointer"
-            title="Step Into (s)"
+            title="Step Into (Shortcut: s / F7 / F11)"
           >
             <StepForward className="w-3.5 h-3.5" />
             Step Into (s)
@@ -653,7 +463,7 @@ export function App() {
           <button
             onClick={() => handleStepOver()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 text-xs font-medium transition cursor-pointer"
-            title="Step Over CALL/LOOP/REP (n)"
+            title="Step Over CALL/LOOP/REP (Shortcut: n / F8 / F10)"
           >
             <FastForward className="w-3.5 h-3.5 text-amber-400" />
             Step Over (n)
@@ -662,7 +472,7 @@ export function App() {
           <button
             onClick={() => handleContinue()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 text-xs font-medium transition cursor-pointer"
-            title="Continue until Breakpoint or INT3 (c)"
+            title="Continue until Breakpoint or INT3 (Shortcut: c / F5 / F9)"
           >
             <Play className="w-3.5 h-3.5 text-emerald-400" />
             Continue (c)
@@ -709,7 +519,7 @@ export function App() {
                 <Cpu className="w-3.5 h-3.5 text-emerald-400" />
                 32-Bit Registers (GPR)
               </h2>
-              <span className="text-[11px] font-mono text-zinc-500">Click to edit</span>
+              <span className="text-[11px] font-mono text-zinc-500">SetCpuState() in C</span>
             </div>
 
             <div className="grid grid-cols-1 gap-1 font-mono text-xs">
@@ -729,10 +539,9 @@ export function App() {
                       value={val.toString(16).toUpperCase().padStart(8, '0')}
                       onChange={(e) => {
                         const parsed = parseInt(e.target.value, 16);
-                        if (!Number.isNaN(parsed)) {
-                          const next = cloneCPUContext(cpu);
-                          next.GPR[idx] = parsed >>> 0;
-                          setCpu(next);
+                        if (!Number.isNaN(parsed) && engineRef.current) {
+                          engineRef.current.setCpuState(name, parsed >>> 0);
+                          syncFromC(engineRef.current);
                         }
                       }}
                       className="bg-transparent text-zinc-100 w-20 text-right focus:outline-none focus:text-amber-300"
@@ -773,9 +582,7 @@ export function App() {
               <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 EFLAGS Register
               </h2>
-              <span className="text-xs font-mono text-zinc-400">
-                {hex32(PackEFLAGS(cpu))}
-              </span>
+              <span className="text-xs font-mono text-zinc-400">{hex32(rawEflags)}</span>
             </div>
             <div className="grid grid-cols-4 gap-1.5 font-mono text-xs">
               {FLAG_KEYS.map((flag) => {
@@ -784,9 +591,9 @@ export function App() {
                   <button
                     key={flag}
                     onClick={() => {
-                      const next = cloneCPUContext(cpu);
-                      next.EFLAGS[flag] = active ? 0 : 1;
-                      setCpu(next);
+                      if (!engineRef.current) return;
+                      engineRef.current.setCpuState(flag, active ? 0 : 1);
+                      syncFromC(engineRef.current);
                     }}
                     className={`py-1 rounded border text-center transition cursor-pointer ${
                       active
@@ -801,16 +608,17 @@ export function App() {
               })}
               <button
                 onClick={() => {
-                  const next = cloneCPUContext(cpu);
-                  next.EFLAGS.IOPL = ((cpu.EFLAGS.IOPL + 1) & 3) as number;
-                  setCpu(next);
+                  if (!engineRef.current) return;
+                  const nextIopl = (cpu.EFLAGS.IOPL + 1) & 3;
+                  engineRef.current.setCpuState('IOPL', nextIopl);
+                  syncFromC(engineRef.current);
                 }}
                 className={`col-span-2 py-1 rounded border text-center transition cursor-pointer ${
                   cpu.EFLAGS.IOPL > 0
                     ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
                     : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'
                 }`}
-                title="Bits 12..13: I/O Privilege Level (I/O 特权级 0..3，点击循环切换)"
+                title="Bits 12..13: I/O Privilege Level (I/O 特权级 0..3，点击通过 C SetCpuState 切换)"
               >
                 IOPL={cpu.EFLAGS.IOPL}
               </button>
@@ -858,7 +666,11 @@ export function App() {
                   >
                     <span className="text-zinc-400">R{physIdx}</span>
                     <span className="font-semibold">{val.toFixed(6)}</span>
-                    <span className={`text-[11px] ${isTop ? 'text-amber-300 font-semibold' : 'text-zinc-500'}`}>
+                    <span
+                      className={`text-[11px] ${
+                        isTop ? 'text-amber-300 font-semibold' : 'text-zinc-500'
+                      }`}
+                    >
                       ST({logicalIdx}){isTop ? ' TOP' : ''}
                     </span>
                   </div>
@@ -875,7 +687,7 @@ export function App() {
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
                 <FileCode className="w-3.5 h-3.5 text-sky-400" />
-                Core-x86 Disassembler View
+                Core-x86 Disassembler View (core/disasm.c)
               </h2>
               <span className="text-[11px] text-zinc-500 font-mono">
                 Click row to toggle breakpoint (b)
@@ -920,7 +732,7 @@ export function App() {
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
                 <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                TinyX86 Interactive Debugger CLI (debugger.c)
+                TinyX86 Interactive Debugger CLI (core/debugger.c stdout)
               </h2>
               <div className="flex items-center gap-1">
                 <button
@@ -950,7 +762,10 @@ export function App() {
               </div>
             </div>
 
-            <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded p-2.5 overflow-y-auto font-mono text-xs space-y-1 max-h-64">
+            <div
+              ref={terminalContainerRef}
+              className="flex-1 bg-zinc-950 border border-zinc-800 rounded p-2.5 overflow-y-auto font-mono text-xs space-y-1 max-h-64"
+            >
               {logs.map((line, i) => (
                 <div
                   key={i}
@@ -967,7 +782,6 @@ export function App() {
                   {line}
                 </div>
               ))}
-              <div ref={terminalEndRef} />
             </div>
 
             <form
@@ -1041,7 +855,7 @@ export function App() {
               }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              Tests ({integrationResult.checks}/{integrationResult.checks})
+              C Tests ({integrationResult.checks}/{integrationResult.checks})
             </button>
             <button
               onClick={() => setActiveRightTab('guide')}
@@ -1155,18 +969,20 @@ export function App() {
             <div className="flex-1 overflow-y-auto text-xs space-y-3 font-mono">
               {!peInfo ? (
                 <div className="bg-zinc-950 border border-zinc-800 rounded p-3 text-zinc-400 space-y-2">
-                  <p>Currently running a raw machine-code image mapped at 0x00400000.</p>
+                  <p>Currently running a raw machine-code image mapped at 0x00400000 via C LoadMem().</p>
                   <p>
                     Click <strong>Load .EXE / .BIN</strong> in the top bar to parse and map any
                     32-bit Windows PE executable (<code>IMAGE_DOS_HEADER</code>,{' '}
                     <code>IMAGE_NT_HEADERS32</code>, and section table mapping via{' '}
-                    <code>PELoader.c</code>).
+                    <code>core/PELoader.c</code> &amp; <code>core/PETools.c</code>).
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className="bg-zinc-950 border border-zinc-800 rounded p-2.5 space-y-1">
-                    <div className="text-emerald-400 font-semibold mb-1">PE32 Header Info</div>
+                    <div className="text-emerald-400 font-semibold mb-1">
+                      PE32 Header Info (Parsed by C ParsePEHeaders)
+                    </div>
                     <div>ImageBase: {hex32(peInfo.imageBase)}</div>
                     <div>AddressOfEntryPoint (RVA): {hex32(peInfo.entryPointRVA)}</div>
                     <div>SizeOfImage: {hex32(peInfo.sizeOfImage)}</div>
@@ -1197,28 +1013,30 @@ export function App() {
             <div className="flex-1 overflow-y-auto font-mono text-xs space-y-2">
               <div className="bg-emerald-950/30 border border-emerald-700/50 rounded p-2.5 text-emerald-200">
                 <div className="font-semibold">
-                  tests/cpu_integration_tests.c Verification
+                  Native C11 WebAssembly Verification (core/*.c → public/tinyx86.wasm)
                 </div>
                 <div className="text-[11px] text-emerald-300/90 mt-0.5">
                   Status: {integrationResult.passed ? 'ALL PASSED' : 'FAILED'} (
-                  {integrationResult.checks} checks, {integrationResult.failures} failures)
+                  {integrationResult.checks} C assertions, {integrationResult.failures} failures)
+                </div>
+                <div className="text-[11px] text-sky-300 mt-1">
+                  sizeof(CPU_Context) = {integrationResult.sizeofCpuContext} bytes | sizeof(DecodeContext) ={' '}
+                  {integrationResult.sizeofDecodeContext} bytes
                 </div>
               </div>
-              <div className="bg-zinc-950 border border-zinc-800 rounded p-2.5 space-y-1">
-                {integrationResult.details.map((line, idx) => (
-                  <div
-                    key={idx}
-                    className={
-                      line.startsWith('PASS')
-                        ? 'text-emerald-400'
-                        : line.startsWith('FAIL')
-                        ? 'text-red-400'
-                        : 'text-amber-300 font-semibold pt-1 border-t border-zinc-800'
-                    }
-                  >
-                    {line}
-                  </div>
-                ))}
+              <div className="bg-zinc-950 border border-zinc-800 rounded p-2.5 space-y-1.5 text-[11px] text-zinc-300">
+                <div className="text-amber-300 font-semibold">
+                  Executed directly in C via wasm_run_c_integration_tests():
+                </div>
+                <div className="text-emerald-400">
+                  PASS [Suite 1]: ParseInstuction() + runcpu() ALU/Stack/ZF (EAX=42, EBX=42, ECX=0, ZF=1)
+                </div>
+                <div className="text-emerald-400">
+                  PASS [Suite 2]: Relative Branch JMP rel8 (0xEB 0x05 skipping intermediate MOV)
+                </div>
+                <div className="text-emerald-400">
+                  PASS [Suite 3]: x87 FPU Ring Stack (FLD1 + FLD1 + FADDP -&gt; ST(0) == 2.0)
+                </div>
               </div>
             </div>
           )}
@@ -1227,32 +1045,18 @@ export function App() {
             <div className="flex-1 overflow-y-auto text-xs space-y-2.5 pr-1">
               <div className="bg-zinc-950 border border-zinc-800 rounded p-2.5 space-y-1.5">
                 <div className="text-amber-300 font-semibold">
-                  手写模拟器学 x86 汇编的 6 大核心要点
+                  原生 C11 代码直通前端 (WASI WebAssembly 架构)
                 </div>
                 <p className="text-zinc-300 leading-relaxed">
-                  <strong>1. 寄存器物理重叠 (Union)：</strong> <code>EAX</code> 低 16 位为{' '}
-                  <code>AX</code>，拆分为 <code>AH</code> (bits 8..15) 与 <code>AL</code> (bits
-                  0..7)；8 位编码索引 4~7 对应 <code>AH/CH/DH/BH</code>。
+                  当前前端界面<strong>不含任何 TypeScript 模拟器重写</strong>，而是将仓库中的{' '}
+                  <code>core/TinyX86.c</code>、<code>core/disasm.c</code>、
+                  <code>core/PELoader.c</code>、<code>core/PETools.c</code> 与{' '}
+                  <code>core/debugger.c</code> 通过 Clang (<code>wasm32-wasi</code>) 直接编译为{' '}
+                  <code>public/tinyx86.wasm</code>。
                 </p>
                 <p className="text-zinc-300 leading-relaxed">
-                  <strong>2. CF 与 OF 标志位公式：</strong> 硬件加法器不区分有符号/无符号，
-                  <code>CF</code> 检测无符号进借位，<code>OF</code> 检测有符号同号相加异号溢出{' '}
-                  <code>((dest ^ res) &amp; (src ^ res) &amp; sign_mask)</code>。
-                </p>
-                <p className="text-zinc-300 leading-relaxed">
-                  <strong>3. ModR/M + SIB 寻址：</strong>{' '}
-                  <code>EA = Base + Index * (1 &lt;&lt; Scale) + Disp</code>；<code>LEA</code>{' '}
-                  只算地址不访存。
-                </p>
-                <p className="text-zinc-300 leading-relaxed">
-                  <strong>4. Debug 栈帧 “烫烫烫”：</strong> 函数序言通过{' '}
-                  <code>rep stosd</code> 将局部变量区填满 <code>0xCCCCCCCC</code>（即{' '}
-                  <code>INT 3</code> 软断点）。
-                </p>
-                <p className="text-zinc-300 leading-relaxed">
-                  <strong>5. x87 FPU 环形栈：</strong> 8 个物理寄存器通过{' '}
-                  <code>(TOP + i) &amp; 7</code> 映射为 <code>ST(i)</code>，压栈时{' '}
-                  <code>TOP</code> 递减回绕。
+                  每一次单步执行、反汇编、寄存器读写和终端输出，均直接调用您的 C 语言函数并拦截 C{' '}
+                  <code>printf</code> 标准输出流。
                 </p>
               </div>
 

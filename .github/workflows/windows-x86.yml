@@ -57,11 +57,20 @@ jobs:
         run: ctest --test-dir build-ci -C Release --output-on-failure
 
   web-debugger:
-    name: Web Debugger Build (Node.js 22)
+    name: Web Debugger Build (C11 -> WASM + Node.js 22)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Compile C11 Core to WebAssembly (wasi-sdk)
+        run: |
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.tar.gz | tar xz -C /tmp
+          mkdir -p public
+          /tmp/wasi-sdk-24.0-x86_64-linux/bin/clang -std=c11 -O2 -Iinclude -Iinclude/compat \
+            -Wl,--export-dynamic -Wl,--no-entry \
+            core/TinyX86.c core/disasm.c core/PELoader.c core/PETools.c core/debugger.c core/wasm_bridge.c \
+            -lm -o public/tinyx86.wasm
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

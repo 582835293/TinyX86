@@ -22,7 +22,11 @@ CORE_SRCS := core/TinyX86.c core/disasm.c core/PETools.c
 APP_SRCS  := core/main.c core/PELoader.c core/debugger.c
 TEST_SRCS := tests/cpu_integration_tests.c
 
-.PHONY: all debug release test run web clean help
+WASM_CC  ?= /tmp/wasi-sdk/bin/clang
+WASM_OUT := public/tinyx86.wasm
+WASM_SRCS := core/TinyX86.c core/disasm.c core/PELoader.c core/PETools.c core/debugger.c core/wasm_bridge.c
+
+.PHONY: all debug release test run wasm web clean help
 
 all: $(TARGET) $(TEST_BIN)
 
@@ -47,6 +51,10 @@ test: $(TEST_BIN)
 run: $(TARGET)
 	./$(TARGET)
 
+wasm: $(WASM_SRCS)
+	mkdir -p public
+	$(WASM_CC) -std=c11 -O2 -Iinclude -Iinclude/compat -Wl,--export-dynamic -Wl,--no-entry $(WASM_SRCS) -lm -o $(WASM_OUT)
+
 web:
 	npm install && npm run dev
 
@@ -60,5 +68,6 @@ help:
 	@echo "  make release  - Build with optimizations (-O3)"
 	@echo "  make test     - Build and run C integration tests"
 	@echo "  make run      - Build and launch interactive TinyX86 Shell"
+	@echo "  make wasm     - Compile C11 core/*.c into public/tinyx86.wasm (via WASI Clang)"
 	@echo "  make web      - Launch interactive Web Debugger on port 3000"
 	@echo "  make clean    - Remove build artifacts"

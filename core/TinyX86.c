@@ -45,6 +45,8 @@ void TinyX86_RegisterRegion(uint32_t guest_base, void* host_ptr, uint32_t size) 
     }
 }
 
+static uint8_t g_UnmappedGuardPage[64];
+
 uint8_t* TinyX86_TranslateAddress(uint32_t guest_addr) {
     for (int i = 0; i < MAX_MEM_REGIONS; i++) {
         if (g_Regions[i].active) {
@@ -55,8 +57,9 @@ uint8_t* TinyX86_TranslateAddress(uint32_t guest_addr) {
             }
         }
     }
-    // 32位宿主环境下支持直接 Host-Passthrough 回退
-    return (uint8_t*)(uintptr_t)guest_addr;
+    // 未映射的客户机虚拟地址统一回退至安全零页，防止越界崩溃 (WASM Out-of-Bounds / 64位 Segfault)
+    memset(g_UnmappedGuardPage, 0, sizeof(g_UnmappedGuardPage));
+    return g_UnmappedGuardPage;
 }
 
 // === 执行与调度 ===

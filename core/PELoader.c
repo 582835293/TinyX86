@@ -16,15 +16,16 @@ uint32_t g_StackGuestBase = 0x00100000;
 uint32_t g_StackSize = 1024 * 64;
 
 static void* AllocHostMemory(uint32_t preferred_addr, uint32_t size) {
+    uint32_t alloc_bytes = size + 64; // 尾部预留 64 字节安全护栏，防止边界跨字读取或反汇编越界
 #if defined(_WIN32) && !defined(_WIN64)
-    void* p = VirtualAlloc((LPVOID)(uintptr_t)preferred_addr, size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    void* p = VirtualAlloc((LPVOID)(uintptr_t)preferred_addr, alloc_bytes, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
     if (!p && preferred_addr != 0) {
-        p = VirtualAlloc(NULL, size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        p = VirtualAlloc(NULL, alloc_bytes, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
     }
     return p;
 #else
     (void)preferred_addr;
-    return calloc(1, size);
+    return calloc(1, alloc_bytes);
 #endif
 }
 
@@ -74,6 +75,65 @@ static bool InitCpuCommon(CPU_Context* ctx, uint32_t entryPoint, uint32_t stackS
 }
 
 // ---------------------------------------------------------
+// LoadExeFromMemory: 从内存缓冲区解析 PE32 头并映射各节区
+// ---------------------------------------------------------
+bool LoadExeFromMemory(const void* pFileBuffer, uint32_t fileSize, CPU_Context* ctx) {
+    if (!pFileBuffer || fileSize == 0) {
+        return false;
+    }
+
+    PEHeaderInfo info;
+    memset(&info, 0, sizeof(info));
+    if (!ParsePEHeaders((void*)pFileBuffer, &info) || info.dwSizeOfImage == 0) {
+        printf("[Loader Critical] Invalid PE32 header in buffer\n");
+        return false;
+    }
+
+    printf("[Loader Info] Target ImageBase: 0x%08X, SizeOfImage: 0x%08X\n", info.dwImageBase, info.dwSizeOfImage);
+    UnloadExe(ctx);
+
+    g_CodeMemory = AllocHostMemory(info.dwImageBase, info.dwSizeOfImage);
+    if (!g_CodeMemory) {
+        printf("[Loader Critical] Memory allocation failed for ImageSize 0x%08X\n", info.dwSizeOfImage);
+        return false;
+    }
+
+    memset(g_CodeMemory, 0, info.dwSizeOfImage);
+    uint32_t hdrCopy = info.dwSizeOfHeaders < fileSize ? info.dwSizeOfHeaders : fileSize;
+    memcpy(g_CodeMemory, pFileBuffer, hdrCopy);
+
+    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)pFileBuffer;
+    PIMAGE_NT_HEADERS32 pNt = (PIMAGE_NT_HEADERS32)((const uint8_t*)pFileBuffer + pDos->e_lfanew);
+    PIMAGE_SECTION_HEADER pSec = IMAGE_FIRST_SECTION(pNt);
+
+    for (int i = 0; i < info.wNumberOfSections; i++) {
+        if (pSec[i].SizeOfRawData > 0 &&
+            pSec[i].VirtualAddress < info.dwSizeOfImage &&
+            pSec[i].PointerToRawData < fileSize) {
+            uint32_t copyLen = pSec[i].SizeOfRawData;
+            if (pSec[i].VirtualAddress + copyLen > info.dwSizeOfImage) {
+                copyLen = info.dwSizeOfImage - pSec[i].VirtualAddress;
+            }
+            if (pSec[i].PointerToRawData + copyLen > fileSize) {
+                copyLen = fileSize - pSec[i].PointerToRawData;
+            }
+            void* dest = (uint8_t*)g_CodeMemory + pSec[i].VirtualAddress;
+            const void* src = (const uint8_t*)pFileBuffer + pSec[i].PointerToRawData;
+            memcpy(dest, src, copyLen);
+        }
+    }
+
+    uint32_t guestBase = info.dwImageBase ? info.dwImageBase : 0x00400000;
+#if defined(_WIN32) && !defined(_WIN64)
+    guestBase = (uint32_t)(uintptr_t)g_CodeMemory;
+#endif
+    TinyX86_RegisterRegion(guestBase, g_CodeMemory, info.dwSizeOfImage);
+
+    printf("[Loader Success] Loaded at 0x%08X. Entry: 0x%08X\n", guestBase, guestBase + info.dwEntryPoint);
+    return InitCpuCommon(ctx, guestBase + info.dwEntryPoint, 0);
+}
+
+// ---------------------------------------------------------
 // LoadExe: 利用 PETools 解析并映射 (支持 Windows / Linux / macOS)
 // ---------------------------------------------------------
 bool LoadExe(const char* filepath, CPU_Context* ctx) {
@@ -84,48 +144,9 @@ bool LoadExe(const char* filepath, CPU_Context* ctx) {
         return false;
     }
 
-    PEHeaderInfo info;
-    memset(&info, 0, sizeof(info));
-    if (!ParsePEHeaders(pFileBuffer, &info) || info.dwSizeOfImage == 0) {
-        printf("[Loader Critical] Invalid PE32 header in %s\n", filepath);
-        free(pFileBuffer);
-        return false;
-    }
-
-    printf("[Loader Info] Target ImageBase: 0x%08X\n", info.dwImageBase);
-    TinyX86_ClearRegions();
-
-    g_CodeMemory = AllocHostMemory(info.dwImageBase, info.dwSizeOfImage);
-    if (!g_CodeMemory) {
-        printf("[Loader Critical] Memory allocation failed for ImageSize 0x%08X\n", info.dwSizeOfImage);
-        free(pFileBuffer);
-        return false;
-    }
-
-    memset(g_CodeMemory, 0, info.dwSizeOfImage);
-    memcpy(g_CodeMemory, pFileBuffer, info.dwSizeOfHeaders);
-
-    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)pFileBuffer;
-    PIMAGE_NT_HEADERS32 pNt = (PIMAGE_NT_HEADERS32)((uint8_t*)pFileBuffer + pDos->e_lfanew);
-    PIMAGE_SECTION_HEADER pSec = IMAGE_FIRST_SECTION(pNt);
-
-    for (int i = 0; i < info.wNumberOfSections; i++) {
-        if (pSec[i].SizeOfRawData > 0) {
-            void* dest = (uint8_t*)g_CodeMemory + pSec[i].VirtualAddress;
-            void* src  = (uint8_t*)pFileBuffer + pSec[i].PointerToRawData;
-            memcpy(dest, src, pSec[i].SizeOfRawData);
-        }
-    }
+    bool ok = LoadExeFromMemory(pFileBuffer, fileSize, ctx);
     free(pFileBuffer);
-
-    uint32_t guestBase = info.dwImageBase ? info.dwImageBase : 0x00400000;
-#if defined(_WIN32) && !defined(_WIN64)
-    guestBase = (uint32_t)(uintptr_t)g_CodeMemory;
-#endif
-    TinyX86_RegisterRegion(guestBase, g_CodeMemory, info.dwSizeOfImage);
-
-    printf("[Loader Success] Loaded at 0x%08X. Entry: 0x%08X\n", guestBase, info.dwEntryPoint);
-    return InitCpuCommon(ctx, guestBase + info.dwEntryPoint, 0);
+    return ok;
 }
 
 // ---------------------------------------------------------

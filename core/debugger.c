@@ -34,6 +34,102 @@ static void Cmd_RegWrite(CPU_Context* ctx, const char* args);
 static void Cmd_StackDump(CPU_Context* ctx, const char* args);
 static void PrintHelp(void);
 
+bool DebuggerExecuteCommand(CPU_Context* ctx, const char* input_line) {
+    if (!ctx || !input_line) return false;
+    while (*input_line == ' ' || *input_line == '\t') input_line++;
+    if (*input_line == '\0') return false;
+
+    DecodeContext d_ctx;
+    uint8_t* code_ptr = TinyX86_TranslateAddress(ctx->EIP);
+    ParseInstuction(code_ptr, ctx->EIP, &d_ctx);
+    FormatInstruction(code_ptr, &d_ctx);
+
+    char cmd = (char)tolower((unsigned char)input_line[0]);
+    const char* args = input_line + 1;
+    while (*args == ' ') args++;
+
+    switch (cmd) {
+        case 's':
+            Cmd_StepInto(ctx, args);
+            break;
+        case 'n':
+            Cmd_StepOver(ctx, &d_ctx);
+            break;
+        case 'c':
+            Cmd_Continue(ctx);
+            break;
+        case 'b':
+            if (strncmp(args, "l", 1) == 0) Cmd_ListBreakpoints();
+            else if (strncmp(args, "c", 1) == 0) Cmd_ClearBreakpoints();
+            else Cmd_AddBreakpoint(args);
+            break;
+        case 'r':
+            Cmd_ShowRegs(ctx);
+            break;
+        case 'u':
+            Cmd_Disasm(ctx, args);
+            break;
+        case 'm':
+            Cmd_MemDump(args);
+            break;
+        case 'k':
+            Cmd_StackDump(ctx, args);
+            break;
+        case 'e':
+            if (strncmp(args, "d", 1) == 0) Cmd_MemWriteVal(args + 1, 4);
+            else if (strncmp(args, "w", 1) == 0) Cmd_MemWriteVal(args + 1, 2);
+            else Cmd_MemEdit(args);
+            break;
+        case 'w':
+            Cmd_RegWrite(ctx, args);
+            break;
+        case 'h':
+        case '?':
+            PrintHelp();
+            break;
+        case 'q':
+            ctx->Halted = true;
+            printf("Debugger exited. (Halted State: YES)\n");
+            return true;
+        default:
+            printf("Unknown command '%c'. Type 'h' for help.\n", cmd);
+            break;
+    }
+    return false;
+}
+
+bool DebuggerToggleBreakpoint(uint32_t addr) {
+    for (int i = 0; i < g_BpCount; i++) {
+        if (g_Breakpoints[i] == addr) {
+            for (int j = i; j < g_BpCount - 1; j++) {
+                g_Breakpoints[j] = g_Breakpoints[j + 1];
+            }
+            g_BpCount--;
+            printf("Removed breakpoint at 0x%08X\n", addr);
+            return false;
+        }
+    }
+    if (g_BpCount >= MAX_BREAKPOINTS) {
+        printf("Error: Breakpoint list full (%d).\n", MAX_BREAKPOINTS);
+        return false;
+    }
+    g_Breakpoints[g_BpCount++] = addr;
+    printf("Breakpoint set at 0x%08X\n", addr);
+    return true;
+}
+
+int DebuggerGetBreakpoints(uint32_t* out_addrs, int max_count) {
+    int n = g_BpCount < max_count ? g_BpCount : max_count;
+    for (int i = 0; i < n; i++) {
+        out_addrs[i] = g_Breakpoints[i];
+    }
+    return n;
+}
+
+void DebuggerClearBreakpoints(void) {
+    g_BpCount = 0;
+}
+
 void Debugger(CPU_Context* ctx) {
     char input[128];
     DecodeContext d_ctx;
@@ -54,57 +150,9 @@ void Debugger(CPU_Context* ctx) {
         input[strcspn(input, "\r\n")] = 0;
         if (strlen(input) == 0) continue;
 
-        char cmd = (char)tolower((unsigned char)input[0]);
-        char* args = input + 1;
-        while (*args == ' ') args++;
-
-        switch (cmd) {
-            case 's':
-                Cmd_StepInto(ctx, args);
-                break;
-            case 'n':
-                Cmd_StepOver(ctx, &d_ctx);
-                break;
-            case 'c':
-                Cmd_Continue(ctx);
-                break;
-            case 'b':
-                if (strncmp(args, "l", 1) == 0) Cmd_ListBreakpoints();
-                else if (strncmp(args, "c", 1) == 0) Cmd_ClearBreakpoints();
-                else Cmd_AddBreakpoint(args);
-                break;
-            case 'r':
-                Cmd_ShowRegs(ctx);
-                break;
-            case 'u':
-                Cmd_Disasm(ctx, args);
-                break;
-            case 'm':
-                Cmd_MemDump(args);
-                break;
-            case 'k':
-                Cmd_StackDump(ctx, args);
-                break;
-            case 'e':
-                if (strncmp(args, "d", 1) == 0) Cmd_MemWriteVal(args + 1, 4);
-                else if (strncmp(args, "w", 1) == 0) Cmd_MemWriteVal(args + 1, 2);
-                else Cmd_MemEdit(args);
-                break;
-            case 'w':
-                Cmd_RegWrite(ctx, args);
-                break;
-            case 'h':
-            case '?':
-                PrintHelp();
-                break;
-            case 'q':
-                ctx->Halted = true;
-                break;
-            default:
-                printf("Unknown command '%c'. Type 'h' for help.\n", cmd);
-                break;
+        if (DebuggerExecuteCommand(ctx, input)) {
+            break;
         }
-        if (cmd == 'q') break;
     }
     printf("Debugger exited. (Halted State: %s)\n", ctx->Halted ? "YES" : "NO");
 }
@@ -178,11 +226,12 @@ static void Cmd_StepOver(CPU_Context* ctx, DecodeContext* d_ctx) {
 }
 
 static void Cmd_Continue(CPU_Context* ctx) {
-    printf("Running... (Press Ctrl+C if stuck loop)\n");
+    printf("Running...\n");
     if (IsBreakpoint(ctx->EIP)) {
         runcpu(ctx, 1);
     }
-    while (!ctx->Halted) {
+    int max_steps = 500000;
+    while (!ctx->Halted && max_steps-- > 0) {
         if (IsSoftwareBreakpoint(ctx->EIP)) {
             printf("\n[Debugger] Hit Software Breakpoint (INT 3) at 0x%08X\n", ctx->EIP);
             break;
@@ -192,6 +241,9 @@ static void Cmd_Continue(CPU_Context* ctx) {
             printf("\n[Debugger] Hit Breakpoint at 0x%08X\n", ctx->EIP);
             break;
         }
+    }
+    if (max_steps <= 0) {
+        printf("[Warn] Execution paused after 500,000 steps (infinite loop guard).\n");
     }
 }
 
@@ -388,22 +440,30 @@ bool SetCpuState(CPU_Context* ctx, const char* name_in, uint32_t val) {
             break;
         case 'A':
             if (strcmp(name, "AX") == 0) ctx->EAX.I16 = (uint16_t)val;
+            else if (strcmp(name, "AL") == 0) ctx->EAX.I8.L = (uint8_t)val;
+            else if (strcmp(name, "AH") == 0) ctx->EAX.I8.H = (uint8_t)val;
             else if (strcmp(name, "AF") == 0) ctx->EFLAGS.AF = (val ? 1 : 0);
             else return false;
             break;
         case 'B':
             if (strcmp(name, "BX") == 0) ctx->EBX.I16 = (uint16_t)val;
+            else if (strcmp(name, "BL") == 0) ctx->EBX.I8.L = (uint8_t)val;
+            else if (strcmp(name, "BH") == 0) ctx->EBX.I8.H = (uint8_t)val;
             else if (strcmp(name, "BP") == 0) ctx->EBP.I16 = (uint16_t)val;
             else return false;
             break;
         case 'C':
             if (strcmp(name, "CX") == 0) ctx->ECX.I16 = (uint16_t)val;
+            else if (strcmp(name, "CL") == 0) ctx->ECX.I8.L = (uint8_t)val;
+            else if (strcmp(name, "CH") == 0) ctx->ECX.I8.H = (uint8_t)val;
             else if (strcmp(name, "CS") == 0) ctx->CS = (uint16_t)val;
             else if (strcmp(name, "CF") == 0) ctx->EFLAGS.CF = (val ? 1 : 0);
             else return false;
             break;
         case 'D':
             if (strcmp(name, "DX") == 0) ctx->EDX.I16 = (uint16_t)val;
+            else if (strcmp(name, "DL") == 0) ctx->EDX.I8.L = (uint8_t)val;
+            else if (strcmp(name, "DH") == 0) ctx->EDX.I8.H = (uint8_t)val;
             else if (strcmp(name, "DI") == 0) ctx->EDI.I16 = (uint16_t)val;
             else if (strcmp(name, "DS") == 0) ctx->DS = (uint16_t)val;
             else if (strcmp(name, "DF") == 0) ctx->EFLAGS.DF = (val ? 1 : 0);
