@@ -1585,9 +1585,12 @@ export function SetCpuState(ctx: CPUContext, nameIn: string, val: number): boole
     case 'AF': ctx.EFLAGS.AF = uVal ? 1 : 0; return true;
     case 'ZF': ctx.EFLAGS.ZF = uVal ? 1 : 0; return true;
     case 'SF': ctx.EFLAGS.SF = uVal ? 1 : 0; return true;
-    case 'DF': ctx.EFLAGS.DF = uVal ? 1 : 0; return true;
+    case 'TF': ctx.EFLAGS.TF = uVal ? 1 : 0; return true;
     case 'IF': ctx.EFLAGS.IF = uVal ? 1 : 0; return true;
+    case 'DF': ctx.EFLAGS.DF = uVal ? 1 : 0; return true;
     case 'OF': ctx.EFLAGS.OF = uVal ? 1 : 0; return true;
+    case 'IOPL': ctx.EFLAGS.IOPL = uVal & 3; return true;
+    case 'NT': ctx.EFLAGS.NT = uVal ? 1 : 0; return true;
     case 'TOP': ctx.FPU.SW.TOP = uVal & 7; return true;
     default: return false;
   }

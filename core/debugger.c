@@ -318,10 +318,12 @@ void PrintFlags(CPU_Context* ctx) {
     if (ctx->EFLAGS.AF) printf("AF ");
     if (ctx->EFLAGS.ZF) printf("ZF ");
     if (ctx->EFLAGS.SF) printf("SF ");
-    if (ctx->EFLAGS.OF) printf("OF ");
-    if (ctx->EFLAGS.DF) printf("DF ");
+    if (ctx->EFLAGS.TF) printf("TF ");
     if (ctx->EFLAGS.IF) printf("IF ");
-    printf("] (Raw: 0x%08X)\n", ctx->EFLAGS.Value);
+    if (ctx->EFLAGS.DF) printf("DF ");
+    if (ctx->EFLAGS.OF) printf("OF ");
+    if (ctx->EFLAGS.NT) printf("NT ");
+    printf("IOPL=%u ] (Raw: 0x%08X)\n", (unsigned)ctx->EFLAGS.IOPL, ctx->EFLAGS.Value);
 }
 
 void PrintFPU(CPU_Context* ctx) {
@@ -424,6 +426,11 @@ bool SetCpuState(CPU_Context* ctx, const char* name_in, uint32_t val) {
             break;
         case 'I':
             if (strcmp(name, "IF") == 0) ctx->EFLAGS.IF = (val ? 1 : 0);
+            else if (strcmp(name, "IOPL") == 0) ctx->EFLAGS.IOPL = (val & 3);
+            else return false;
+            break;
+        case 'N':
+            if (strcmp(name, "NT") == 0) ctx->EFLAGS.NT = (val ? 1 : 0);
             else return false;
             break;
         case 'O':
@@ -440,6 +447,7 @@ bool SetCpuState(CPU_Context* ctx, const char* name_in, uint32_t val) {
             break;
         case 'T':
             if (strcmp(name, "TOP") == 0) ctx->FPU.SW.TOP = (val & 7);
+            else if (strcmp(name, "TF") == 0) ctx->EFLAGS.TF = (val ? 1 : 0);
             else return false;
             break;
         default:

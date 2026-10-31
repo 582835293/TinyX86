@@ -1,5 +1,9 @@
 # TinyX86 —— 为深入理解 x86 汇编而生的轻量级 CPU 模拟器与交互式调试器
 
+[![Live Demo](https://img.shields.io/badge/%F0%9F%9A%80_%E5%9C%A8%E7%BA%BF%E4%BD%93%E9%AA%8C-Web_%E5%8F%AF%E8%A7%86%E5%8C%96%E8%B0%83%E8%AF%95%E5%99%A8-10b981?style=for-the-badge)](https://ais-pre-neq7lcp5oujt3fpvu3shvc-534275048659.us-east1.run.app)
+[![GitHub Pages](https://img.shields.io/badge/%F0%9F%8C%90_GitHub_Pages-%E5%9C%A8%E7%BA%BF%E9%95%9C%E5%83%8F-3b82f6?style=for-the-badge)](https://582835293.github.io/TinyX86/)
+[![Open in StackBlitz](https://img.shields.io/badge/%E2%9A%A1_StackBlitz-%E4%BA%91%E7%AB%AF%E4%B8%80%E9%94%AE%E8%BF%90%E8%A1%8C-f59e0b?style=for-the-badge)](https://stackblitz.com/github/582835293/TinyX86)
+
 [![Cross-Platform CI](https://img.shields.io/badge/CI-Windows%20%7C%20Linux%20%7C%20macOS-success)](#6-跨平台构建指南windows--linux--macos--web)
 [![Language](https://img.shields.io/badge/Language-C11%20%2F%20TypeScript-blue)](#3-目录结构与系统架构)
 [![Architecture](https://img.shields.io/badge/ISA-x86--32%20%2B%20x87%20FPU-orange)](#4-已实现的-x86--x87-指令集全景)
@@ -10,11 +14,17 @@
 
 **TinyX86** 是一个用于学习目的、采用纯 C11 编写的轻量级 **x86-32 CPU 与 x87 FPU 指令集模拟器**，配套 **简易 PE32 入口点 / 原始机器码加载器** 与 **类 GDB/OllyDbg 命令行交互式调试器**，并同时提供 **Web 在线可视化调试工作台**。现已支持 **Windows (x86 / x64)**、**Linux (x86_64 / ARM64)** 与 **macOS (Intel / Apple Silicon)** 跨平台构建与运行。
 
-### Web 可视化调试工作台实际运行界面
+### 🌐 在线免安装直接体验（点击即用）
 
-![TinyX86 Web Debugger Real Screenshot](docs/images/web-debugger-screenshot.png)
+无需在本地配置编译器或 Node 环境，点击下方任意入口即可直接在浏览器中单步调试 `power(2.0, 3)` 递归栈帧、观察 `EFLAGS` 与 `x87 FPU` 寄存器变化，或上传无外部依赖的 `.exe` / `.bin` 机器码：
 
-> **上图：TinyX86 Web 可视化调试器实际运行界面** —— 顶部支持切换内置汇编测试预设、单步步入（`Step Into (s)`）、单步步过（`Step Over (n)`）、继续运行（`Continue (c)`）与加载本地 `.EXE / .BIN`；左侧实时展示 32 位通用寄存器（`EAX~EDI`）、`EIP`、段寄存器、可点击切换的 `EFLAGS` 标志位与 `x87 FPU` 子系统状态；中部为 `Core-x86 Disassembler View` 反汇编视图与兼容 `debugger.c` 的交互式命令行终端；右侧提供 `Stack`（栈帧视图）、`Mem`（内存 Hex 视图）、`PE32`（PE 头基础信息）、`Tests`（13 项内置自检测试）与构建说明标签页。
+- 👉 **[入口一：立即打开 TinyX86 在线可视化调试工作台 (Cloud Run 直连)](https://ais-pre-neq7lcp5oujt3fpvu3shvc-534275048659.us-east1.run.app)**
+- 👉 **[入口二：GitHub Pages 静态托管版 (`https://582835293.github.io/TinyX86/`)](https://582835293.github.io/TinyX86/)**
+- 👉 **[入口三：在 StackBlitz 云端 IDE 中打开并运行 (`stackblitz.com`)](https://stackblitz.com/github/582835293/TinyX86)**
+
+[![TinyX86 Web Debugger Real Screenshot](docs/images/web-debugger-screenshot.png)](https://ais-pre-neq7lcp5oujt3fpvu3shvc-534275048659.us-east1.run.app)
+
+> **上图（点击图片可直接跳转在线版）：TinyX86 Web 可视化调试器实际运行界面** —— 顶部支持切换内置汇编测试预设、单步步入（`Step Into (s)`）、单步步过（`Step Over (n)`）、继续运行（`Continue (c)`）与加载本地 `.EXE / .BIN`；左侧实时展示 32 位通用寄存器（`EAX~EDI`）、`EIP`、段寄存器、可点击切换的 `EFLAGS` 标志位与 `x87 FPU` 子系统状态；中部为 `Core-x86 Disassembler View` 反汇编视图与兼容 `debugger.c` 的交互式命令行终端；右侧提供 `Stack`（栈帧视图）、`Mem`（内存 Hex 视图）、`PE32`（PE 头基础信息）、`Tests`（13 项内置自检测试）与构建说明标签页。
 
 ---
 
@@ -258,13 +268,19 @@ make release    # 使用 -O3 编译优化版本
 make clean      # 清理构建产物
 ```
 
-### 6.3 方式三：启动 Web 可视化调试工作台（Node.js + Vite）
+### 6.3 方式三：启动 Web 可视化调试工作台（本地运行或 GitHub Pages 自动部署）
 
+**本地启动：**
 ```bash
 npm install
 npm run dev
 # 浏览器访问 http://localhost:3000 即可使用图形化单步调试、寄存器/EFLAGS 实时修改与 PE32 结构查看器
 ```
+
+**开启 GitHub Pages 永久在线入口（仓库已内置 `.github/workflows/deploy-pages.yml`）：**
+1. 将代码推送到 GitHub 仓库后，打开仓库顶部的 **Settings** -> 左侧菜单 **Pages**。
+2. 在 **Build and deployment -> Source** 下拉框中选择 **`GitHub Actions`**。
+3. 之后每次 `git push`，GitHub Actions 都会自动打包前端页面并发布到 `https://582835293.github.io/TinyX86/`，任何人点开链接都能直接在浏览器里使用。
 
 ---
 

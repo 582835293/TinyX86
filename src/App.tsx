@@ -36,7 +36,19 @@ import {
 
 const GPR_NAMES = ['EAX', 'ECX', 'EDX', 'EBX', 'ESP', 'EBP', 'ESI', 'EDI'];
 const SEG_NAMES = ['ES', 'CS', 'SS', 'DS', 'FS', 'GS'];
-const FLAG_KEYS = ['CF', 'PF', 'AF', 'ZF', 'SF', 'OF', 'DF', 'IF'] as const;
+const FLAG_KEYS = ['CF', 'PF', 'AF', 'ZF', 'SF', 'TF', 'IF', 'DF', 'OF', 'NT'] as const;
+const FLAG_DESCRIPTIONS: Record<(typeof FLAG_KEYS)[number], string> = {
+  CF: 'Bit 0: Carry Flag (进位/借位标志)',
+  PF: 'Bit 2: Parity Flag (奇偶标志)',
+  AF: 'Bit 4: Auxiliary Carry Flag (辅助进位标志)',
+  ZF: 'Bit 6: Zero Flag (零标志)',
+  SF: 'Bit 7: Sign Flag (符号标志)',
+  TF: 'Bit 8: Trap Flag (单步陷阱标志)',
+  IF: 'Bit 9: Interrupt Enable Flag (中断允许标志)',
+  DF: 'Bit 10: Direction Flag (串操作方向标志)',
+  OF: 'Bit 11: Overflow Flag (有符号溢出标志)',
+  NT: 'Bit 14: Nested Task Flag (嵌套任务标志)',
+};
 
 type ProgramPresetId = 'power_fpu' | 'sum_loop' | 'dos_int21';
 
@@ -260,7 +272,9 @@ export function App() {
       `EIP: ${hex32(c.EIP)}  CS:${(c.seg[1] & 0xffff).toString(16).toUpperCase().padStart(4, '0')} DS:${(c.seg[3] & 0xffff).toString(16).toUpperCase().padStart(4, '0')} ES:${(c.seg[0] & 0xffff).toString(16).toUpperCase().padStart(4, '0')} SS:${(c.seg[2] & 0xffff).toString(16).toUpperCase().padStart(4, '0')}`
     );
     const activeFlags = FLAG_KEYS.filter((k) => c.EFLAGS[k] === 1).join(' ');
-    lines.push(`FLAGS: [ ${activeFlags} ] (Raw: ${hex32(PackEFLAGS(c))})`);
+    lines.push(
+      `FLAGS: [ ${activeFlags}${activeFlags ? ' ' : ''}IOPL=${c.EFLAGS.IOPL} ] (Raw: ${hex32(PackEFLAGS(c))})`
+    );
     lines.push('--- FPU ---------------------------------------------------------');
     const top = c.FPU.SW.TOP;
     lines.push(
@@ -779,12 +793,27 @@ export function App() {
                         ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 font-semibold'
                         : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'
                     }`}
-                    title={`Toggle ${flag}`}
+                    title={FLAG_DESCRIPTIONS[flag]}
                   >
                     {flag}={active ? 1 : 0}
                   </button>
                 );
               })}
+              <button
+                onClick={() => {
+                  const next = cloneCPUContext(cpu);
+                  next.EFLAGS.IOPL = ((cpu.EFLAGS.IOPL + 1) & 3) as number;
+                  setCpu(next);
+                }}
+                className={`col-span-2 py-1 rounded border text-center transition cursor-pointer ${
+                  cpu.EFLAGS.IOPL > 0
+                    ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                }`}
+                title="Bits 12..13: I/O Privilege Level (I/O 特权级 0..3，点击循环切换)"
+              >
+                IOPL={cpu.EFLAGS.IOPL}
+              </button>
             </div>
           </div>
 
