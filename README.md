@@ -4,7 +4,7 @@
 [![Open in StackBlitz](https://img.shields.io/badge/%E2%9A%A1_StackBlitz-%E4%BA%91%E7%AB%AF%E4%B8%80%E9%94%AE%E8%BF%90%E8%A1%8C-f59e0b?style=for-the-badge)](https://stackblitz.com/github/582835293/TinyX86)
 
 [![Cross-Platform CI](https://img.shields.io/badge/CI-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20WASM-success)](#7-跨平台构建指南windows--linux--macos--wasi-wasm)
-[![Language](https://img.shields.io/badge/Core-Pure%20C11%20%E2%86%92%20Native%20 &%20WebAssembly-blue)](#3-架构设计纯-c11-内核直通跨平台命令行与-webassembly-前端)
+[![Language](https://img.shields.io/badge/Core-Pure%20C11%20%E2%86%92%20Native%20%26%20WebAssembly-blue)](#3-架构设计纯-c11-内核直通跨平台命令行与-webassembly-前端)
 [![Architecture](https://img.shields.io/badge/ISA-x86--32%20%2B%20x87%20FPU-orange)](#5-已实现的-x86--x87-指令集全景矩阵)
 
 > **“What I cannot create, I do not understand.” —— Richard Feynman**
