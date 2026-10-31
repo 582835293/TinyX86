@@ -128,10 +128,9 @@ $$\text{EffectiveAddress} = \text{Base} + \text{Index} \times 2^{\text{Scale}} +
 TinyX86/
 ├── include/                      # 核心 C 语言公开头文件 (.h)
 │   ├── TinyX86.h                 # CPU_Context、REG32、EFLAGS、FPU 与虚拟内存映射接口
-│   ├── disasm.h                  # x86-32 指令解码器结构体 (DecodeContext) 与反汇编接口
 │   ├── PELoader.h                # 简易 PE32 节区拉伸 / 原始机器码内存加载接口
-│   ├── PETools.h                 # 跨平台 PE32 DOS/NT 头与节表解析结构定义
-│   └── debugger.h                # 命令行交互式调试器接口
+│   ├── debugger.h                # 命令行交互式调试器接口
+│   └── compat/                   # 跨平台内置 disasm.h 与 PETools.h 头文件（避免遮蔽 deps/ 子模块同名头文件）
 ├── core/                         # 核心 C 语言实现源码 (.c)
 │   ├── TinyX86.c                 # CPU 取指-解码-执行主循环、ALU、x87 FPU 与地址转换实现
 │   ├── disasm.c                  # 内置跨平台 x86-32 解码器与 Intel 语法格式化实现

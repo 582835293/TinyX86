@@ -3,7 +3,7 @@
 # =============================================================================
 
 CC       ?= cc
-CFLAGS   ?= -std=c11 -Wall -Wextra -Wno-unused-parameter -O2 -Iinclude
+CFLAGS   ?= -std=c11 -Wall -Wextra -Wno-unused-parameter -O2 -Iinclude -Iinclude/compat
 LDFLAGS  ?=
 LDLIBS   ?= -lm
 
@@ -35,10 +35,10 @@ $(TARGET): $(CORE_SRCS) $(APP_SRCS) | $(BUILD_DIR)
 $(TEST_BIN): $(CORE_SRCS) $(TEST_SRCS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(CORE_SRCS) $(TEST_SRCS) -o $(TEST_BIN) $(LDFLAGS) $(LDLIBS)
 
-debug: CFLAGS := -std=c11 -Wall -Wextra -Wno-unused-parameter -g -O0 -DDEBUG -Iinclude
+debug: CFLAGS := -std=c11 -Wall -Wextra -Wno-unused-parameter -g -O0 -DDEBUG -Iinclude -Iinclude/compat
 debug: clean all
 
-release: CFLAGS := -std=c11 -Wall -Wextra -Wno-unused-parameter -O3 -DNDEBUG -Iinclude
+release: CFLAGS := -std=c11 -Wall -Wextra -Wno-unused-parameter -O3 -DNDEBUG -Iinclude -Iinclude/compat
 release: clean all
 
 test: $(TEST_BIN)

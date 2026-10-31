@@ -13,7 +13,7 @@ include(GNUInstallDirs)
 # 构建选项 (Build Options)
 # ============================================================================
 option(TINYX86_BUILD_TESTS "Build TinyX86 integration and unit tests" ON)
-option(TINYX86_USE_SUBMODULES "Prefer git submodules in deps/ when available on Win32" ON)
+option(TINYX86_USE_SUBMODULES "Prefer git submodules in deps/ when available on Win32" OFF)
 option(TINYX86_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 set(CMAKE_C_STANDARD 11)
@@ -28,8 +28,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-set(TINYX86_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
-set(TINYX86_CORE_DIR    "${CMAKE_CURRENT_SOURCE_DIR}/core")
+set(TINYX86_INCLUDE_DIR        "${CMAKE_CURRENT_SOURCE_DIR}/include")
+set(TINYX86_COMPAT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/compat")
+set(TINYX86_CORE_DIR           "${CMAKE_CURRENT_SOURCE_DIR}/core")
 
 # ============================================================================
 # 跨平台编译器与链接器配置 (Windows MSVC / MinGW / Linux GCC / macOS Clang)
@@ -63,7 +64,8 @@ else()
 endif()
 
 # ============================================================================
-# 依赖模块检测：优先支持子模块，跨平台或独立克隆时自动回退至内置可移植实现
+# 依赖模块检测：默认使用内置跨平台实现以保证全平台 ABI 一致；
+# 如需在 Win32 下使用 deps/ 子模块，可通过 -DTINYX86_USE_SUBMODULES=ON 开启
 # ============================================================================
 set(USE_SUBMODULE_DISASM FALSE)
 set(USE_SUBMODULE_PETOOLS FALSE)
@@ -84,9 +86,9 @@ else()
     message(STATUS "[TinyX86] Using built-in cross-platform Core-x86 disassembler (core/disasm.c)")
     add_library(core_x86 STATIC
         "${TINYX86_CORE_DIR}/disasm.c"
-        "${TINYX86_INCLUDE_DIR}/disasm.h"
+        "${TINYX86_COMPAT_INCLUDE_DIR}/disasm.h"
     )
-    target_include_directories(core_x86 PUBLIC "${TINYX86_INCLUDE_DIR}")
+    target_include_directories(core_x86 PUBLIC "${TINYX86_COMPAT_INCLUDE_DIR}")
     target_link_libraries(core_x86 PRIVATE tinyx86_compiler_flags)
 endif()
 
@@ -97,9 +99,9 @@ else()
     message(STATUS "[TinyX86] Using built-in cross-platform PE32 parser (core/PETools.c)")
     add_library(petools STATIC
         "${TINYX86_CORE_DIR}/PETools.c"
-        "${TINYX86_INCLUDE_DIR}/PETools.h"
+        "${TINYX86_COMPAT_INCLUDE_DIR}/PETools.h"
     )
-    target_include_directories(petools PUBLIC "${TINYX86_INCLUDE_DIR}")
+    target_include_directories(petools PUBLIC "${TINYX86_COMPAT_INCLUDE_DIR}")
     target_link_libraries(petools PRIVATE tinyx86_compiler_flags)
 endif()
 
